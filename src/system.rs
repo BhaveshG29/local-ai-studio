@@ -83,15 +83,32 @@ impl SystemInfo {
     }
 }
 
+/// The canonical form of `path`, or of its nearest parent that exists, for matching against
+/// the mount points that disks are listed under.
 fn canonical_or_parent(path: &Path) -> PathBuf {
     let mut cur = path.to_path_buf();
     loop {
         if let Ok(c) = cur.canonicalize() {
-            return c;
+            // On Windows `canonicalize` returns "verbatim" paths (`\\?\C:\…`), which never
+            // match the plain mount points (`C:\`) disks are listed under.
+            return if cfg!(windows) { without_verbatim_prefix(c) } else { c };
         }
         if !cur.pop() {
             return path.to_path_buf();
         }
+    }
+}
+
+/// `\\?\C:\dir` → `C:\dir` and `\\?\UNC\server\share\dir` → `\\server\share\dir`; any
+/// other path is returned unchanged.
+fn without_verbatim_prefix(path: PathBuf) -> PathBuf {
+    let Some(s) = path.to_str() else { return path };
+    if let Some(rest) = s.strip_prefix(r"\\?\UNC\") {
+        return PathBuf::from(format!(r"\\{rest}"));
+    }
+    match s.strip_prefix(r"\\?\") {
+        Some(rest) if rest.as_bytes().get(1) == Some(&b':') => PathBuf::from(rest),
+        _ => path,
     }
 }
 
@@ -641,6 +658,36 @@ pub fn assess_fit(total_needed: u64, available: u64, total: u64) -> (Fit, String
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn verbatim_windows_paths_are_simplified() {
+        let s = |p: &str| without_verbatim_prefix(PathBuf::from(p)).to_string_lossy().into_owned();
+        assert_eq!(s(r"\\?\C:\Users\me\models"), r"C:\Users\me\models");
+        assert_eq!(s(r"\\?\D:\"), r"D:\");
+        assert_eq!(s(r"\\?\UNC\nas\share\models"), r"\\nas\share\models");
+        // Volume GUID paths have no drive letter to fall back to.
+        assert_eq!(
+            s(r"\\?\Volume{1b3b1146-4076-11e1-84aa-806e6f6e6963}\x"),
+            r"\\?\Volume{1b3b1146-4076-11e1-84aa-806e6f6e6963}\x"
+        );
+        assert_eq!(s(r"C:\Users\me"), r"C:\Users\me");
+        assert_eq!(s("/home/me/models"), "/home/me/models");
+    }
+
+    #[test]
+    fn free_space_is_found_for_a_folder() {
+        // The folder's disk must be found on every platform, or downloads skip the
+        // free-space check (this happened on Windows).
+        let dir = tempfile::tempdir().unwrap();
+        let monitor = SystemMonitor::new();
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        assert!(
+            rt.block_on(monitor.available_space(dir.path())).is_some(),
+            "no disk found for {}",
+            dir.path().display()
+        );
+        assert!(rt.block_on(monitor.available_space(&dir.path().join("not/yet/created"))).is_some());
+    }
 
     #[test]
     fn cpu_lists_parse() {

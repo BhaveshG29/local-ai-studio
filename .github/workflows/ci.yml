@@ -53,17 +53,28 @@ jobs:
       - name: Test
         # Tests that need real models, a GPU, Ollama or internet access are #[ignore]d;
         # see the "Testing" section of the README to run them locally.
-        run: cargo test --locked --all-targets
+        # --no-fail-fast: run every test file even after a failure, so one run shows them all.
+        run: cargo test --locked --all-targets --no-fail-fast
       - name: Start-up smoke test
         shell: bash
         run: cargo run --locked -- --system-info
 
   msrv:
-    name: Minimum Rust version (1.88)
+    name: Minimum Rust version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.88
+      # The version comes from `rust-version` in Cargo.toml, so the two never disagree.
+      - name: Read rust-version from Cargo.toml
+        id: msrv
+        run: |
+          version=$(sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml)
+          test -n "$version"
+          echo "Minimum Rust version: $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --locked --all-targets
 

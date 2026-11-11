@@ -2,7 +2,9 @@
 name = "local-ai-studio"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.88"
+# Candle 0.11 needs Rust 1.94 on x86-64 (it uses intrinsics that became safe to call in 1.94).
+# CI checks this version; Clippy's `incompatible_msrv` lint checks our own code against it.
+rust-version = "1.94"
 authors = ["Bhavesh G", "Claude (Anthropic)"]
 license = "Apache-2.0"
 description = "Discover, download, manage and run AI models locally — Hugging Face + Ollama, native Rust inference with Candle."

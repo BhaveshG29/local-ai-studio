@@ -180,7 +180,8 @@ Optional software:
 - **Ollama** — more models (including vision models) and automatic GPU use: <https://ollama.com/download>
 - **ffmpeg** — video in chats and video transcription: <https://ffmpeg.org/download.html>
 
-To **build** from source you need Rust 1.88 or newer (<https://rustup.rs>) and a C compiler
+To **build** from source you need Rust 1.94 or newer (<https://rustup.rs>; the Candle engine
+needs 1.94 on x86-64 processors) and a C compiler
 (SQLite is compiled from source): Visual Studio Build Tools (“Desktop development with C++”) on
 Windows, Xcode Command Line Tools on macOS, `build-essential`/`gcc` on Linux. No other system
 libraries are needed.
@@ -486,13 +487,15 @@ and compiles the Metal feature on macOS. Tagged versions are built for all four 
 | Platform | Build & automated tests | Built-in engine (CPU) | Built-in engine (GPU) | Ollama | Keychain |
 |---|---|---|---|---|---|
 | Linux x86_64 | ✅ tested: Ubuntu 24.04 (Intel Core Ultra 9 185H, RTX 4060 Laptop) and a Linux container | ✅ tested | NVIDIA with `--features cuda` (not tested by the authors) | ✅ tested, GPU | Secret Service (GNOME Keyring, KWallet); otherwise session-only |
-| Windows x64 | set up in CI, not yet run | expected ✅ | NVIDIA with `--features cuda` (not tested) | expected ✅ | Credential Manager |
-| macOS Apple Silicon | set up in CI, not yet run | expected ✅ | Metal with `--features metal` (not tested) | expected ✅ | Keychain |
-| macOS Intel | set up in CI, not yet run | expected ✅ | — | expected ✅ | Keychain |
+| Windows x64 | built and tested in CI | expected ✅ | NVIDIA with `--features cuda` (not tested) | expected ✅ | Credential Manager |
+| macOS Apple Silicon | built and tested in CI | expected ✅ | Metal with `--features metal` (not tested) | expected ✅ | Keychain |
+| macOS Intel | built and tested in CI | expected ✅ | — | expected ✅ | Keychain |
 | AMD / Intel GPUs | — | CPU only | not supported by Candle | where Ollama supports them | — |
 
-“Set up in CI” means the workflow builds and tests these platforms; it runs once the repository
-is on GitHub. Until then only the Linux results above have actually been observed.
+“Built and tested in CI” means GitHub Actions builds these platforms and runs the automated tests
+on every push; the Actions tab shows the latest results. The first run found one Windows-only bug
+(the free-space check before downloads), which is fixed. The app has not yet been used
+interactively on Windows or macOS.
 
 Known limitations of the tests: GPU code paths can't run in CI; the ollama.com reader is tested
 against stored HTML (the fake site also imitates ollama.com answering JSON-accepting clients with

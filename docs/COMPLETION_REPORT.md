@@ -46,7 +46,7 @@ implemented or not verified · ❌ not implemented
 | Local server: `127.0.0.1` by default, network access only with explicit opt-in and an access token, port conflicts, graceful shutdown | ✅ / ☑ | Live: three Ctrl+C restarts, each logged as “stopped cleanly”; the rest by tests |
 | Security: Host-header check, cross-site request blocking, CSP without scripts, path traversal, HTML escaping (including maths), token never written to disk, size limits | ☑ | Tests |
 
-## 2. Problems found in the live session — all fixed
+## 2. Problems found in the live session and on GitHub — all fixed
 
 1. **Ollama library pages failed.** ollama.com now answers `/library/<name>/tags` with a bare JSON
    list of names whenever a client accepts JSON. The app asks for the HTML page, also understands
@@ -77,6 +77,20 @@ README's platform table only claims what was observed. The System page now also 
 how much memory a loaded built-in model takes (the size of its weights); that change came after
 the live session, so it has not been seen on a live page yet.
 
+The first GitHub Actions run found two more:
+
+12. **Windows downloads skipped the free-space check.** Windows gives folder paths as
+    `\\?\C:\…`, which never matched the disk `C:\`, so free space was “unknown” (also on the
+    Downloads, Settings and Home pages) and a download larger than the disk would have started.
+    The prefix is now removed before matching. The download test caught it on Windows; a unit
+    test now covers the conversion.
+13. **The stated minimum Rust version, 1.88, was too old:** Candle 0.11.1 needs Rust 1.94 on
+    x86-64. The minimum is now 1.94; the CI check reads it from `Cargo.toml`, and Clippy checks
+    our own code against it.
+
+The release workflow also stopped because a release for `v0.1.0` had already been made by hand.
+It now attaches its files to an existing release instead of failing.
+
 ## 3. Measurements on the laptop
 
 Ubuntu 24.04, Intel Core Ultra 9 185H (6 performance + 10 efficiency cores, 22 threads),
@@ -98,13 +112,13 @@ kernels are the limit. Ollama is the fast path on this machine.
 
 | Where | Toolchain | Result |
 |---|---|---|
-| Linux container (x86_64) | Rust 1.97 | **185 passed, 0 failed**; 6 opt-in real-model tests not run (no models or internet there). `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check`: clean |
-| Ubuntu 24.04 laptop | Rust 1.99.1 | **185 passed, 0 failed**; the same 6 opt-in tests skipped. Compiled in 37 s (dependencies already built), ran in ≈ 11 s |
+| Linux container (x86_64) | Rust 1.97 | **187 passed, 0 failed** with the fixes for items 12–13 (185 before them); 6 opt-in real-model tests not run (no models or internet there). `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check`: clean |
+| Ubuntu 24.04 laptop | Rust 1.99.1 | **185 passed, 0 failed** (before items 12–13); the same 6 opt-in tests skipped. Compiled in 37 s (dependencies already built), ran in ≈ 11 s |
 | Ubuntu 24.04 laptop, opt-in real-model tests (release build) | Rust 1.99.1 | **3 passed, 0 failed** in 7.8 s. Built-in engine with the real Qwen2.5-0.5B-Instruct Q4_K_M: answered “Paris”, gave the same answer twice with a fixed seed, answered through the OpenAI-compatible API, unloaded. Ollama with `qwen3:0.6b`: answered “4” through the OpenAI-compatible API. Live huggingface.co and ollama.com: search, model pages, versions with sizes. Not run: download-then-chat (the same download was done by hand in the live session), Whisper and SD-Turbo (their downloads were skipped to save disk space) |
-| Windows, macOS | — | Not run. The CI workflow builds and tests both on every push once the repository is on GitHub |
+| Windows, macOS: GitHub Actions, first run | stable | Release builds compiled for Windows and both kinds of Mac. Windows tests: 149 passed, **1 failed** (item 12, fixed); the test files after it did not run, because Cargo stops at the first failing file. CI now uses `--no-fail-fast`, so the next run gives the first complete Windows result |
 
-By suite (the same on both machines): unit 116 · chat 11 · discovery 8 · downloads 15 ·
-models 8 · pages 11 · security 9 · server 7.
+By suite (container, with the fixes): unit 118 · chat 11 · discovery 8 · downloads 15 · models 8 ·
+pages 11 · security 9 · server 7.
 
 ## 5. Main decisions
 
@@ -124,11 +138,11 @@ models 8 · pages 11 · security 9 · server 7.
 
 ## 6. Supported platforms
 
-Linux x86_64: built, tested and used (Ubuntu 24.04). Windows x64, macOS on Apple Silicon and on
-Intel: expected to work — the code has their platform paths (keychain, GPU detection, data
-folders) and the CI workflow builds and tests them — but not yet observed. GPU acceleration in
-the built-in engine needs a CUDA or Metal build and has not been tested; Ollama provides GPU use
-everywhere it supports the hardware.
+Linux x86_64: built, tested and used (Ubuntu 24.04). Windows x64 and macOS (Apple Silicon and
+Intel): the release builds compile on GitHub Actions and CI runs the tests there on every push;
+on Windows the first run found one bug (item 12, fixed). The app has not yet been used
+interactively on them. GPU acceleration in the built-in engine needs a CUDA or Metal build and
+has not been tested; Ollama provides GPU use everywhere it supports the hardware.
 
 ## 7. Known limitations
 
@@ -145,6 +159,8 @@ everywhere it supports the hardware.
 - Release binaries are not code-signed (Windows SmartScreen / macOS Gatekeeper warnings).
 
 ## 8. Build and run
+
+Needs Rust 1.94 or newer and a C compiler (see the README).
 
 ```bash
 cargo build --release
