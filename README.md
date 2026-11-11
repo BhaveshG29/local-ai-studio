@@ -1,12 +1,12 @@
 # Local AI Studio
 
-**Author:** Bhavesh G and Claude
+**Author:** Bhavesh G and Claude (Opus 5.5)
 
 *Find, download and run AI models on your own computer — privately, without the cloud.*
 
 ---
 
-## 2. Abstract
+## 1. Abstract
 
 Local AI Studio is a single program that turns your computer into a private AI workstation.
 It lets you browse the model catalogs of **Hugging Face** and **Ollama**, download models with a
@@ -31,7 +31,7 @@ Why it is useful:
 - **Made for non-experts.** Plain language, big buttons, empty states that say what to do next,
   and six carefully designed themes.
 
-## 3. Features
+## 2. Features
 
 Legend: ✅ implemented and tested · 🧪 implemented, depends on your hardware/models (see
 [Testing](#9-testing)) · 🚧 not implemented (see [Future improvements](#12-future-improvements)).
@@ -148,7 +148,7 @@ Legend: ✅ implemented and tested · 🧪 implemented, depends on your hardware
 - ✅ Keyboard shortcuts, skip link, visible focus, screen-reader labels, reduced-motion support,
   responsive layout down to phone width, print styles for chats.
 
-## 4. Screenshots
+## 3. Screenshots
 
 Screenshots are stored in [`docs/screenshots/`](docs/screenshots/). They show pages served by
 the running application during a test session on Ubuntu 24.04 (Intel Core Ultra 9 185H, RTX 4060
@@ -164,7 +164,7 @@ the home folder in paths were replaced. Each page is shown in a different theme.
 
 All six themes on the same page: [`docs/screenshots/themes/`](docs/screenshots/themes/).
 
-## 5. System requirements
+## 4. System requirements
 
 | | Minimum | Recommended |
 |---|---|---|
@@ -186,7 +186,7 @@ needs 1.94 on x86-64 processors) and a C compiler
 Windows, Xcode Command Line Tools on macOS, `build-essential`/`gcc` on Linux. No other system
 libraries are needed.
 
-## 6. Installation and execution
+## 5. Installation and execution
 
 ### Get the code
 
@@ -315,7 +315,7 @@ images).
   `GET /v1/models`. A reasoning model's thinking is part of `content`, inside
   `<think>…</think>`, as the model wrote it.
 
-## 7. Project structure
+## 6. Project structure
 
 ```text
 local-ai-studio/
@@ -381,7 +381,7 @@ local-ai-studio/
 └── .github/workflows/           CI (format, lint, test on Linux/Windows/macOS) and releases
 ```
 
-## 8. Implementation details
+## 7. Implementation details
 
 **Architecture.** One Rust binary contains the web server, the engines, the database and all
 assets. Requests are handled by Axum on Tokio. Pages are rendered on the server with Askama
@@ -440,7 +440,7 @@ plain files in the data folder.
   only sent to the configured Hugging Face endpoint.
 - Downloads are verified by checksum before they are moved into the library.
 
-## 9. Testing
+## 8. Testing
 
 ```bash
 cargo test                      # unit + integration tests (no internet, no models needed)
@@ -502,7 +502,7 @@ against stored HTML (the fake site also imitates ollama.com answering JSON-accep
 a bare tag list) plus an opt-in live test, because the site has no API; generation quality isn't
 measured, only correctness of the plumbing and determinism with a fixed seed.
 
-## 10. Troubleshooting
+## 9. Troubleshooting
 
 | Problem | What to do |
 |---|---|
@@ -520,7 +520,7 @@ measured, only correctness of the plumbing and determinism with a fixed seed.
 | Windows SmartScreen / macOS “unidentified developer” | The release binaries aren't code-signed. Windows: *More info → Run anyway*. macOS: right-click → *Open*, or `xattr -d com.apple.quarantine local-ai-studio`. |
 | Something else | Settings → Logging → *Open logs folder*; raise the level to `debug`, reproduce, and look at the newest log. Settings → Data & cache can clear caches or reset settings without touching models or chats. |
 
-## 11. License
+## 10. License
 
 Local AI Studio is licensed under the **Apache License 2.0** (see [`LICENSE`](LICENSE) and
 [`NOTICE`](NOTICE)).
@@ -551,7 +551,7 @@ publishers (for example Meta, Google, Alibaba, Microsoft, Stability AI, OpenAI).
 may restrict commercial use or require attribution; checking and following them is your
 responsibility. Local AI Studio shows each model's license where the publisher provides one.
 
-## 12. Future improvements
+## 11. Future improvements
 
 - **Vision in the built-in engine** (e.g. LLaVA / Qwen2-VL style models in Candle), so image
   understanding doesn't require Ollama.
@@ -564,7 +564,7 @@ responsibility. Local AI Studio shows each model's license where the publisher p
 - **Installers** (MSI, DMG, AppImage/Flatpak) with code signing, and automatic update checks.
 - **Smarter memory planning**: partial GPU offload and KV-cache quantisation in the built-in engine.
 
-## 13. Acknowledgements
+## 12. Acknowledgements
 
 Local AI Studio stands on the shoulders of many open-source projects, including:
 [Candle](https://github.com/huggingface/candle) and
