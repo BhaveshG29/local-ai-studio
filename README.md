@@ -191,7 +191,7 @@ libraries are needed.
 ### Get the code
 
 ```bash
-git clone https://github.com/<your-account>/local-ai-studio.git
+git clone https://github.com/BhaveshG29/local-ai-studio
 cd local-ai-studio
 ```
 
