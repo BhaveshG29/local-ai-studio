@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<nav class="crumbs" aria-label="Breadcrumb"><a href="/settings#about">Settings</a><span aria-hidden="true">/</span><span>Licenses</span></nav>
+<header class="page-head">
+  <div>
+    <h1>Licenses</h1>
+    <p class="lead">Local AI Studio is open source under the Apache License 2.0. It is built on the open-source projects listed below, whose licenses are reproduced or referenced here.</p>
+  </div>
+</header>
+<div class="notice notice-info"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#info"></use></svg><div>AI models are <b>not</b> part of Local AI Studio. Each model is made and licensed by its publisher (for example Meta, Google, Alibaba or Stability AI). Their licenses can restrict how you use them — check the model's page before relying on it.</div></div>
+<article class="card md license-text">
+{{ third_party_html|safe }}
+</article>
+{% endblock %}

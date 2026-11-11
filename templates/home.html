@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="page-head hero">
+  <div>
+    <p class="eyebrow">Your private AI, on this computer</p>
+    <h1>Welcome to Local AI Studio</h1>
+    <p class="lead">Find a model, download it once, and use it offline. Nothing you type leaves this machine.</p>
+  </div>
+  <div class="cluster">
+    <a class="btn btn-primary btn-lg" href="/chat?new=1" accesskey="n"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#plus"></use></svg>New chat</a>
+    <a class="btn btn-lg" href="/discover"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#compass"></use></svg>Find models</a>
+  </div>
+</header>
+
+{% if first_run %}
+<section class="card onboarding" aria-labelledby="start-title">
+  <h2 id="start-title">Get started in three steps</h2>
+  <ol class="steps">
+    <li><b>Pick a model</b> below (or browse <a href="/discover">Discover</a>). Each page shows the size and whether it fits your computer.</li>
+    <li><b>Press Download</b> and wait for it to finish on the <a href="/downloads">Downloads</a> page.</li>
+    <li><b>Start chatting.</b> Your first message loads the model into memory.</li>
+  </ol>
+</section>
+{% endif %}
+
+<section aria-labelledby="starter-title">
+  <div class="section-head"><h2 id="starter-title">{% if first_run %}Good first models{% else %}Suggested models{% endif %}</h2><a class="link-more" href="/discover">Browse all</a></div>
+  <div class="grid grid-cards">
+    {% for s in starters %}
+    <a class="card card-link starter" href="{{ s.href }}">
+      <div class="card-top"><span class="badge {% if s.engine == "Ollama" %}badge-info{% else %}badge-accent{% endif %}">{{ s.engine }}</span>{% if s.needs_ollama && !ollama_running %}<span class="badge badge-muted" title="Install and start Ollama to use this one">needs Ollama</span>{% endif %}</div>
+      <h3>{{ s.title }}</h3>
+      <p class="muted">{{ s.description }}</p>
+      <span class="card-cta">See details <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#chevron-right"></use></svg></span>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+
+<div class="grid grid-2">
+  <section class="card" aria-labelledby="recent-title">
+    <div class="section-head"><h2 id="recent-title">Recent chats</h2><a class="link-more" href="/chat?new=1">New chat</a></div>
+    {% if recent.is_empty() %}
+    <div class="empty">
+      <svg class="icon icon-xl" aria-hidden="true"><use href="/assets/icons.svg#chat"></use></svg>
+      <p>No conversations yet.</p>
+      {% if chat_model_count > 0 %}<a class="btn btn-primary" href="/chat?new=1">Start your first chat</a>{% else %}<p class="muted small">Download a chat model first.</p>{% endif %}
+    </div>
+    {% else %}
+    <ul class="list">
+      {% for c in recent %}
+      <li><a class="list-link" href="/chat/{{ c.id }}"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#chat"></use></svg><span class="grow truncate">{{ c.title }}</span><span class="muted small">{{ c.when }}</span></a></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>
+
+  <section class="card" aria-labelledby="status-title">
+    <div class="section-head"><h2 id="status-title">Status</h2><a class="link-more" href="/system">Details</a></div>
+    <dl class="kv">
+      <dt>Models</dt><dd>{{ model_count }} in your library · {{ chat_model_count }} ready to chat</dd>
+      <dt>Built-in engine</dt><dd>{{ engine_label }}</dd>
+      <dt>Ollama</dt>
+      <dd>{% if ollama_running %}<span class="badge badge-ok">Running</span> version {{ ollama_version }}{% else if ollama_installed %}<span class="badge badge-warn">Installed, not running</span>{% else %}<span class="badge badge-muted">Not installed</span> <span class="muted small">(optional)</span>{% endif %}</dd>
+      <dt>Memory</dt><dd><meter min="0" max="100" low="75" high="90" optimum="10" value="{{ ram_used_pct }}">{{ ram_used_pct }}%</meter> {{ ram_free }} free of {{ ram_total }}</dd>
+      <dt>Disk</dt><dd>{{ disk_free }} free for models <span class="muted small truncate" title="{{ models_dir }}">({{ models_dir }})</span></dd>
+    </dl>
+    {% if !ollama_running %}
+    <details class="disclosure">
+      <summary>Want more models? Install Ollama (optional)</summary>
+      <p class="small">Ollama runs thousands of extra models, including ones that understand images. On {{ ollama_os }}:</p>
+      <ol class="small">{% for s in ollama_steps %}<li><code class="selectable">{{ s }}</code></li>{% endfor %}</ol>
+      <p class="small muted">Then reload this page. Local AI Studio finds Ollama automatically.</p>
+    </details>
+    {% endif %}
+  </section>
+</div>
+
+{% if !downloads.is_empty() %}
+<section class="card" aria-labelledby="dl-title">
+  <div class="section-head"><h2 id="dl-title">Downloading</h2><a class="link-more" href="/downloads">Open downloads</a></div>
+  <ul class="list">
+    {% for d in downloads %}
+    <li class="dl-mini"><span class="grow truncate">{{ d.title }}</span><progress max="100" value="{{ d.percent }}">{{ d.percent }}%</progress><span class="small muted">{{ d.detail }}</span></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en" data-theme="{{ ctx.theme }}" class="{% if ctx.dark %}is-dark{% else %}is-light{% endif %}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="{% if ctx.dark %}dark{% else %}light{% endif %}">
+{% if let Some(r) = ctx.refresh %}<meta http-equiv="refresh" content="{{ r }}">{% endif %}
+<title>{{ ctx.title }} · Local AI Studio</title>
+<link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/app.css?v={{ ctx.css_rev }}">
+<link rel="stylesheet" href="/assets/themes.css?v={{ ctx.css_rev }}">
+{% block head %}{% endblock %}
+</head>
+<body class="page-{{ ctx.nav }}">
+<a class="skip-link" href="#main">Skip to content</a>
+<input type="checkbox" id="nav-toggle" class="nav-toggle" aria-label="Show menu">
+<div class="app">
+  <label for="nav-toggle" class="nav-scrim" aria-hidden="true"></label>
+  <header class="topbar">
+    <a class="brand" href="/"><svg class="brand-mark" aria-hidden="true"><use href="/assets/icons.svg#logo"></use></svg><span class="brand-name">Local AI Studio</span></a>
+    <label for="nav-toggle" class="btn btn-ghost btn-icon" title="Menu"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#menu"></use></svg><span class="sr-only">Menu</span></label>
+  </header>
+  <aside class="sidebar" aria-label="Main navigation">
+    <a class="brand" href="/" accesskey="h">
+      <svg class="brand-mark" aria-hidden="true"><use href="/assets/icons.svg#logo"></use></svg>
+      <span class="brand-name">Local AI Studio</span>
+    </a>
+    <nav class="nav">
+      <a href="/" {% if ctx.nav == "home" %}class="active" aria-current="page"{% endif %}><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#home"></use></svg><span>Home</span></a>
+      <a href="/chat" accesskey="c" {% if ctx.nav == "chat" %}class="active" aria-current="page"{% endif %}><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#chat"></use></svg><span>Chat</span>{% if ctx.generating > 0 %}<span class="nav-dot" title="Something is being generated"></span>{% endif %}</a>
+      <a href="/discover" accesskey="d" {% if ctx.nav == "discover" %}class="active" aria-current="page"{% endif %}><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#compass"></use></svg><span>Discover</span></a>
+      <a href="/downloads" accesskey="j" {% if ctx.nav == "downloads" %}class="active" aria-current="page"{% endif %}><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#download"></use></svg><span>Downloads</span>{% if ctx.active_downloads > 0 %}<span class="nav-count">{{ ctx.active_downloads }}</span>{% endif %}</a>
+      <a href="/library" accesskey="l" {% if ctx.nav == "library" %}class="active" aria-current="page"{% endif %}><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#library"></use></svg><span>Library</span></a>
+      <div class="nav-sep" role="separator"></div>
+      <a href="/create" accesskey="i" {% if ctx.nav == "create" %}class="active" aria-current="page"{% endif %}><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#image"></use></svg><span>Create images</span></a>
+      <a href="/transcribe" accesskey="t" {% if ctx.nav == "transcribe" %}class="active" aria-current="page"{% endif %}><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#mic"></use></svg><span>Speech to text</span></a>
+      <div class="nav-sep" role="separator"></div>
+      <a href="/system" accesskey="y" {% if ctx.nav == "system" %}class="active" aria-current="page"{% endif %}><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#cpu"></use></svg><span>System</span></a>
+      <a href="/settings" accesskey="g" {% if ctx.nav == "settings" %}class="active" aria-current="page"{% endif %}><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#settings"></use></svg><span>Settings</span></a>
+    </nav>
+    <div class="sidebar-foot">
+      <button type="button" class="btn btn-ghost btn-sm" popovertarget="theme-pop"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#palette"></use></svg>{{ ctx.theme_label }}</button>
+      <button type="button" class="btn btn-ghost btn-sm" popovertarget="keys-pop"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#keyboard"></use></svg>Shortcuts</button>
+      <span class="version">v{{ ctx.version }}</span>
+    </div>
+  </aside>
+  <main id="main" class="main" tabindex="-1">
+    {% if ctx.network_exposed %}
+    <div class="notice notice-warn" role="alert"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#alert"></use></svg><div><b>Network sharing is on.</b> Other devices on your network can reach this app if they have the access token. Turn it off in <a href="/settings#server">Settings → Server</a>.</div></div>
+    {% endif %}
+    {% if let Some(f) = ctx.flash %}
+    <div class="notice notice-{{ f.kind }}" role="status"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#{% if f.kind == "error" %}alert{% else if f.kind == "ok" %}check{% else %}info{% endif %}"></use></svg><div>{{ f.message }}</div></div>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+
+<div id="theme-pop" popover class="popover">
+  <div class="popover-head"><h2>Theme</h2><button type="button" class="btn btn-ghost btn-icon" popovertarget="theme-pop" popovertargetaction="hide" title="Close"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#x"></use></svg><span class="sr-only">Close</span></button></div>
+  <div class="theme-quick">
+    {% for t in ctx.themes %}
+    <form method="post" action="/settings/theme">
+      <input type="hidden" name="theme" value="{{ t.slug }}">
+      <input type="hidden" name="back" value="{{ ctx.current_path }}">
+      <button type="submit" class="theme-chip{% if t.active %} is-active{% endif %}" data-theme="{{ t.slug }}" {% if t.active %}aria-pressed="true"{% else %}aria-pressed="false"{% endif %}>
+        <span class="theme-swatch" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span>{{ t.label }}</span>
+      </button>
+    </form>
+    {% endfor %}
+  </div>
+</div>
+
+<div id="keys-pop" popover class="popover">
+  <div class="popover-head"><h2>Keyboard shortcuts</h2><button type="button" class="btn btn-ghost btn-icon" popovertarget="keys-pop" popovertargetaction="hide" title="Close"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#x"></use></svg><span class="sr-only">Close</span></button></div>
+  <p class="muted small">Hold <kbd>Alt</kbd> (Windows/Linux, Chrome &amp; Edge), <kbd>Alt</kbd>+<kbd>Shift</kbd> (Firefox) or <kbd>Ctrl</kbd>+<kbd>Option</kbd> (Mac) and press:</p>
+  <dl class="keys">
+    <dt><kbd>C</kbd></dt><dd>Chat</dd>
+    <dt><kbd>N</kbd></dt><dd>New chat</dd>
+    <dt><kbd>S</kbd></dt><dd>Send message</dd>
+    <dt><kbd>X</kbd></dt><dd>Stop the answer</dd>
+    <dt><kbd>D</kbd></dt><dd>Discover models</dd>
+    <dt><kbd>J</kbd></dt><dd>Downloads</dd>
+    <dt><kbd>L</kbd></dt><dd>Library</dd>
+    <dt><kbd>I</kbd></dt><dd>Create images</dd>
+    <dt><kbd>T</kbd></dt><dd>Speech to text</dd>
+    <dt><kbd>Y</kbd></dt><dd>System</dd>
+    <dt><kbd>G</kbd></dt><dd>Settings</dd>
+    <dt><kbd>K</kbd></dt><dd>Search (on Discover)</dd>
+    <dt><kbd>H</kbd></dt><dd>Home</dd>
+  </dl>
+  <p class="muted small">Everywhere: <kbd>Tab</kbd> moves between controls, <kbd>Enter</kbd> activates buttons, <kbd>Esc</kbd> closes pop-ups.</p>
+</div>
+</body>
+</html>

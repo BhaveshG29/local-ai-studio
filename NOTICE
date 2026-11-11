@@ -1,0 +1,10 @@
+Local AI Studio
+Copyright 2026 Bhavesh G and Claude (Anthropic), and contributors.
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+It bundles fonts licensed under the SIL Open Font License 1.1 (assets/fonts/licenses) and is
+built on open-source Rust crates whose licenses are listed in THIRD_PARTY_LICENSES.md.
+
+AI models downloaded with Local AI Studio are not part of this product. Each model is owned
+and licensed by its publisher; you are responsible for complying with those licenses.

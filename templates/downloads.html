@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Downloads</h1>
+    <p class="lead">{% if active > 0 %}{{ active }} {% if active == 1 %}download{% else %}downloads{% endif %} in progress. This page updates every second.{% else %}Nothing is downloading right now.{% endif %}</p>
+  </div>
+  {% if any_finished %}
+  <form method="post" action="/downloads/clear"><button class="btn" type="submit"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#x"></use></svg>Clear finished</button></form>
+  {% endif %}
+</header>
+
+{% if paused_count > 0 && active == 0 %}
+<div class="notice notice-info"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#info"></use></svg><div>{% if paused_count == 1 %}1 download is paused{% else %}{{ paused_count }} downloads are paused{% endif %}. Press <b>Resume</b> to continue from where it stopped — downloads also pause when the app closes.</div></div>
+{% endif %}
+
+{% if jobs.is_empty() %}
+<div class="empty card">
+  <svg class="icon icon-xl" aria-hidden="true"><use href="/assets/icons.svg#download"></use></svg>
+  <p>No downloads yet.</p>
+  <a class="btn btn-primary" href="/discover">Find a model</a>
+</div>
+{% else %}
+<ul class="jobs">
+  {% for j in jobs %}
+  <li class="card job job-{{ j.state_class }}">
+    <div class="job-head">
+      <div class="grow">
+        <h2 class="job-title break">{{ j.title }}</h2>
+        <div class="cluster tight small muted"><span class="badge badge-{{ j.state_class }}">{{ j.state }}</span><span>{{ j.source }}</span>{% if j.files > 0 %}<span>{{ j.files }} {% if j.files == 1 %}file{% else %}files{% endif %}</span>{% endif %}<span>started {{ j.created }}</span></div>
+      </div>
+      <div class="cluster job-actions">
+        {% if j.can_pause %}<form method="post" action="/downloads/{{ j.id }}/pause"><button class="btn btn-sm" type="submit"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#pause"></use></svg>Pause</button></form>{% endif %}
+        {% if j.can_resume %}<form method="post" action="/downloads/{{ j.id }}/resume"><button class="btn btn-sm btn-primary" type="submit"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#play"></use></svg>{% if j.state == "Failed" %}Retry{% else %}Resume{% endif %}</button></form>{% endif %}
+        {% if j.can_cancel %}
+        <button type="button" class="btn btn-sm btn-ghost" popovertarget="cancel-{{ j.id }}">Cancel</button>
+        <div id="cancel-{{ j.id }}" popover class="popover confirm">
+          <h3>Cancel this download?</h3>
+          <p>Partly downloaded files are deleted. You can start again later from the model page.</p>
+          <div class="cluster"><form method="post" action="/downloads/{{ j.id }}/cancel"><button class="btn btn-danger" type="submit">Cancel download</button></form><button type="button" class="btn" popovertarget="cancel-{{ j.id }}" popovertargetaction="hide">Keep downloading</button></div>
+        </div>
+        {% endif %}
+        {% if j.can_remove %}<form method="post" action="/downloads/{{ j.id }}/remove"><button class="btn btn-sm btn-ghost" type="submit" title="Remove from this list">Remove</button></form>{% endif %}
+        {% if !j.model_href.is_empty() %}<a class="btn btn-sm" href="{{ j.model_href }}">Open in library</a>{% endif %}
+        {% if !j.chat_href.is_empty() %}<a class="btn btn-sm btn-primary" href="{{ j.chat_href }}">{% if j.source == "Ollama" %}Start chatting{% else %}View model{% endif %}</a>{% endif %}
+      </div>
+    </div>
+    <progress class="job-progress" max="100" value="{{ j.percent }}" aria-label="Progress">{{ j.percent }}%</progress>
+    <div class="job-meta small">
+      <span><b>{{ j.percent_exact }}%</b> · {{ j.done }} of {{ j.total }}</span>
+      {% if !j.speed.is_empty() %}<span>{{ j.speed }}</span>{% endif %}
+      {% if !j.eta.is_empty() %}<span>{{ j.eta }}</span>{% endif %}
+      {% if !j.current.is_empty() %}<span class="truncate mono">{{ j.current }}</span>{% endif %}
+    </div>
+    {% if !j.error.is_empty() %}<p class="job-error"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#alert"></use></svg>{{ j.error }}</p>{% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<section class="card">
+  <h2>Storage</h2>
+  <dl class="kv"><dt>Models folder</dt><dd class="break mono small">{{ models_dir }}</dd><dt>Unfinished downloads</dt><dd class="break mono small">{{ partial_dir }}</dd><dt>Free space</dt><dd>{{ free_space }}</dd></dl>
+  <p class="small muted">Change these in <a href="/settings#storage">Settings → Storage</a>. Every file is checked against its published checksum before it is used.</p>
+</section>
+{% endblock %}

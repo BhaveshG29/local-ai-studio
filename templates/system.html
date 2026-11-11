@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>System</h1>
+    <p class="lead">What this computer has, and what Local AI Studio is using right now.</p>
+  </div>
+  <div class="cluster">
+    {% if live %}
+    <a class="btn" href="/system"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#pause"></use></svg>Stop live updates</a>
+    {% else %}
+    <a class="btn" href="/system?live=1" title="Refresh this page every 3 seconds"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#play"></use></svg>Live updates</a>
+    {% endif %}
+  </div>
+</header>
+
+<div class="grid-2">
+  <section class="card">
+    <h2><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#cpu"></use></svg>Computer</h2>
+    <dl class="kv">
+      <dt>System</dt><dd>{{ os }}</dd>
+      {% if !kernel.is_empty() %}<dt>Kernel</dt><dd>{{ kernel }}</dd>{% endif %}
+      <dt>Architecture</dt><dd>{{ arch }}</dd>
+      {% if !hostname.is_empty() %}<dt>Name</dt><dd>{{ hostname }}</dd>{% endif %}
+      <dt>Processor</dt><dd>{{ cpu }}</dd>
+      <dt>Cores</dt><dd>{{ cores }}{% if !freq.is_empty() %} · {{ freq }}{% endif %}</dd>
+    </dl>
+    {% if !features.is_empty() %}
+    <p class="small muted">Processor features used by the built-in engine:</p>
+    <div class="chips">{% for f in features %}<span class="chip">{{ f }}</span>{% endfor %}</div>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#bolt"></use></svg>Memory</h2>
+    <div class="meter-block">
+      <div class="meter-label"><b>{{ ram.label }}</b><span>{{ ram.percent }}%</span></div>
+      <progress class="bar bar-{{ ram.class }}" max="100" value="{{ ram.percent }}">{{ ram.percent }}%</progress>
+      <p class="small muted">{{ ram.detail }}</p>
+    </div>
+    <p class="small muted">Swap space: {{ swap }}. Models that don't fit in memory spill into swap and become very slow.</p>
+  </section>
+</div>
+
+<section class="card">
+  <h2><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#server"></use></svg>Graphics</h2>
+  {% if gpus.is_empty() %}
+  <p>No graphics card was detected, so models run on the processor (CPU). That works, just more slowly — smaller models (1–4 B) are the most comfortable.</p>
+  {% else %}
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>Graphics</th><th>Memory</th><th>Free now</th><th>Driver</th><th>Detected by</th></tr></thead>
+    <tbody>
+    {% for g in gpus %}
+    <tr><td><b>{{ g.name }}</b>{% if !g.vendor.is_empty() %}<div class="small muted">{{ g.vendor }}</div>{% endif %}</td><td>{{ g.vram }}</td><td>{% if g.free.is_empty() %}<span class="muted">—</span>{% else %}{{ g.free }}{% endif %}</td><td>{% if g.driver.is_empty() %}<span class="muted">—</span>{% else %}{{ g.driver }}{% endif %}</td><td class="small muted">{{ g.source }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% endif %}
+  <h3>Who can use it</h3>
+  <div class="table-wrap"><table class="table compact">
+    <thead><tr><th>Engine</th><th>Hardware</th><th>Status</th><th>Details</th></tr></thead>
+    <tbody>
+    {% for a in accel %}
+    <tr><td>{{ a.engine }}</td><td>{{ a.backend }}</td><td>{% if a.available %}<span class="badge badge-ok">Available</span>{% else %}<span class="badge badge-muted">Not available</span>{% endif %}</td><td class="small">{{ a.detail }}</td></tr>
+    {% endfor %}
+    {% if let Some(e) = ollama_error %}
+    <tr><td>Ollama</td><td>—</td><td><span class="badge badge-muted">Not running</span></td><td class="small">{{ e }}</td></tr>
+    {% endif %}
+    </tbody>
+  </table></div>
+</section>
+
+<section class="card">
+  <h2><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#library"></use></svg>Models in memory</h2>
+  {% if loaded.is_empty() && whisper_loaded.is_empty() && image_loaded.is_empty() %}
+  <p class="muted">No model is loaded. Models load when you first use them and are unloaded again after a while of not being used (see <a href="/settings#inference">Settings → Inference</a>).</p>
+  {% else %}
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>Model</th><th>Running on</th><th>Memory</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead>
+    <tbody>
+    {% for l in loaded %}
+    <tr>
+      <td><b class="break">{{ l.name }}</b></td><td>{{ l.device }}</td><td>{% if l.memory.is_empty() %}<span class="muted">—</span>{% else %}{{ l.memory }}{% endif %}</td><td class="small muted">{{ l.idle }}</td>
+      <td class="num"><form method="post" action="/system/unload"><input type="hidden" name="model_ref" value="{{ l.model_ref }}"><button class="btn btn-sm" type="submit">Unload</button></form></td>
+    </tr>
+    {% endfor %}
+    {% if !whisper_loaded.is_empty() %}
+    <tr><td><b>{{ whisper_loaded }}</b><div class="small muted">Speech to text</div></td><td>Built-in engine</td><td><span class="muted">—</span></td><td></td><td class="num"><form method="post" action="/system/unload"><input type="hidden" name="model_ref" value="whisper"><button class="btn btn-sm" type="submit">Unload</button></form></td></tr>
+    {% endif %}
+    {% if !image_loaded.is_empty() %}
+    <tr><td><b>{{ image_loaded }}</b><div class="small muted">Image generation</div></td><td>Built-in engine</td><td><span class="muted">—</span></td><td></td><td class="num"><form method="post" action="/system/unload"><input type="hidden" name="model_ref" value="image"><button class="btn btn-sm" type="submit">Unload</button></form></td></tr>
+    {% endif %}
+    </tbody>
+  </table></div>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#info"></use></svg>Which chat models fit?</h2>
+  <p class="small muted">A rough guide for models in the common Q4_K_M format with a 4,000-token conversation. Real use depends on the model, its settings and what else is running — these are estimates, never a guarantee. Each model's page in your <a href="/library">Library</a> has a more exact estimate.</p>
+  <div class="table-wrap"><table class="table compact">
+    <thead><tr><th>Model size</th><th>For example</th><th class="num">Needs about</th><th>Memory (RAM)</th>{% if has_gpu_memory %}<th>Graphics memory</th>{% endif %}</tr></thead>
+    <tbody>
+    {% for r in guide %}
+    <tr><td><b>{{ r.size }}</b></td><td class="small">{{ r.examples }}</td><td class="num">{{ r.needs }}</td><td><span class="fit fit-{{ r.fit_class }}">{{ r.fit_label }}</span></td>{% if has_gpu_memory %}<td class="small">{{ r.gpu }}</td>{% endif %}</tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% if has_gpu_memory %}<p class="small muted">Ollama uses the graphics card automatically. The built-in engine uses it only when Local AI Studio was built with CUDA (see the table above).</p>{% endif %}
+</section>
+
+<section class="card">
+  <h2><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#disk"></use></svg>Storage</h2>
+  {% for d in disks %}
+  <div class="meter-block">
+    <div class="meter-label"><b class="break">{{ d.label }}</b><span>{{ d.percent }}%</span></div>
+    <progress class="bar bar-{{ d.class }}" max="100" value="{{ d.percent }}">{{ d.percent }}%</progress>
+    <p class="small muted">{{ d.detail }}</p>
+  </div>
+  {% endfor %}
+  <dl class="kv">
+    <dt>Models folder</dt><dd class="mono break">{{ models_dir }}</dd>
+    <dt>App data</dt><dd class="mono break">{{ data_dir }}</dd>
+  </dl>
+</section>
+
+<section class="card">
+  <h2><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#power"></use></svg>Local AI Studio</h2>
+  <dl class="kv">
+    <dt>Address</dt><dd class="mono">{{ server_url }}</dd>
+    <dt>Running for</dt><dd>{{ uptime }}</dd>
+    <dt>Version</dt><dd>{{ ctx.version }}</dd>
+  </dl>
+  <p class="small muted">Programs on this computer can use the API at <span class="mono">{{ server_url }}/v1</span> (OpenAI-compatible) and <span class="mono">{{ server_url }}/api/health</span>. See the README for details.</p>
+</section>
+{% endblock %}

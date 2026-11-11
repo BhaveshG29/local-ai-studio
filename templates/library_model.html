@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block content %}
+<nav class="crumbs" aria-label="Breadcrumb"><a href="/library">Library</a><span aria-hidden="true">/</span><span>{{ row.name }}</span></nav>
+<header class="page-head">
+  <div>
+    <h1 class="break">{{ row.name }}</h1>
+    <div class="cluster tight">
+      <span class="badge {{ row.cap_class }}">{{ row.capability }}</span>
+      {% if row.runnable %}<span class="badge badge-ok">Ready</span>{% else %}<span class="badge badge-danger">Can't run</span>{% endif %}
+      {% if row.loaded %}<span class="badge badge-ok">In memory</span>{% endif %}
+    </div>
+  </div>
+  <div class="cluster">
+    {% if !row.use_href.is_empty() %}<a class="btn btn-primary" href="{{ row.use_href }}">{{ row.use_label }}</a>{% endif %}
+    {% if row.can_load %}
+    <form method="post" action="/library/action"><input type="hidden" name="model_ref" value="{{ row.model_ref }}"><input type="hidden" name="back" value="{{ row.href }}">{% if row.loaded %}<input type="hidden" name="action" value="unload"><button class="btn" type="submit">Unload</button>{% else %}<input type="hidden" name="action" value="load"><button class="btn" type="submit">Load into memory</button>{% endif %}</form>
+    {% endif %}
+    {% if !row.is_ollama %}
+    <form method="post" action="/library/action"><input type="hidden" name="model_ref" value="{{ row.model_ref }}"><input type="hidden" name="back" value="{{ row.href }}"><input type="hidden" name="action" value="reanalyze"><button class="btn btn-ghost" type="submit"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#refresh"></use></svg>Check again</button></form>
+    {% endif %}
+    {% if !hf_href.is_empty() %}<a class="btn btn-ghost" href="{{ hf_href }}">Model page</a>{% endif %}
+  </div>
+</header>
+
+{% if !problems.is_empty() %}
+<div class="notice notice-error"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#alert"></use></svg><div><b>Why it can't run here:</b><ul>{% for p in problems %}<li>{{ p }}</li>{% endfor %}</ul></div></div>
+{% endif %}
+{% if !notes.is_empty() %}
+<div class="notice notice-info"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#info"></use></svg><div><ul>{% for n in notes %}<li>{{ n }}</li>{% endfor %}</ul></div></div>
+{% endif %}
+
+<div class="split">
+  <section class="card"><h2>Details</h2><dl class="kv">{% for f in facts %}<dt>{{ f.key }}</dt><dd class="break">{{ f.value }}</dd>{% endfor %}</dl></section>
+  <section class="card">
+    <h2>Memory needed</h2>
+    <dl class="kv">{% for m in memory %}<dt>{{ m.key }}</dt><dd>{{ m.value }}</dd>{% endfor %}</dl>
+    <p><span class="fit fit-{{ fit_class }}">{{ fit_msg }}</span></p>
+    <p class="small muted">{{ gpu_msg }}</p>
+    <p class="small muted">Estimates are rough. A model can still fail to run because of other programs, drivers or settings — they're never a guarantee.</p>
+  </section>
+</div>
+
+{% if !files.is_empty() %}
+<section class="card">
+  <h2>Files</h2>
+  <div class="table-wrap"><table class="table compact"><thead><tr><th>File</th><th class="num">Size</th><th>SHA-256 (start)</th></tr></thead>
+  <tbody>{% for f in files %}<tr><td class="mono small break">{{ f.0 }}</td><td class="num">{{ f.1 }}</td><td class="mono small">{{ f.2 }}</td></tr>{% endfor %}</tbody></table></div>
+</section>
+{% endif %}
+{% if !parameters_text.is_empty() %}
+<details class="card disclosure"><summary><h2>Default parameters (Ollama)</h2></summary><pre class="pre-wrap small">{{ parameters_text }}</pre></details>
+{% endif %}
+{% if !template_excerpt.is_empty() %}
+<details class="card disclosure"><summary><h2>Prompt template</h2></summary><pre class="pre-wrap small">{{ template_excerpt }}</pre></details>
+{% endif %}
+{% if !license_excerpt.is_empty() %}
+<details class="card disclosure"><summary><h2>License (from the publisher)</h2></summary><pre class="pre-wrap small">{{ license_excerpt }}</pre></details>
+{% endif %}
+{% endblock %}

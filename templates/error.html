@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="error-page card">
+  <p class="eyebrow">Error {{ status }}</p>
+  <h1>{{ heading }}</h1>
+  <p class="lead">{{ message }}</p>
+  <div class="cluster">
+    <a class="btn btn-primary" href="{{ back }}"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#chevron-left"></use></svg>Go back</a>
+    <a class="btn" href="/">Home</a>
+  </div>
+</section>
+{% endblock %}

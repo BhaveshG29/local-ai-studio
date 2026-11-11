@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Speech to text</h1>
+    <p class="lead">Turn recordings into text with Whisper, on this computer. Get the text, subtitles, or ask a chat model about it.</p>
+  </div>
+</header>
+
+{% if !has_models %}
+<div class="empty card">
+  <svg class="icon icon-xl" aria-hidden="true"><use href="/assets/icons.svg#mic"></use></svg>
+  <h2>No speech model yet</h2>
+  <p>Download a Whisper model first. <b>Whisper Base</b> (about 290 MB) is quick and good for clear speech; <b>Small</b> and larger are more accurate but slower.</p>
+  <div class="cluster center"><a class="btn btn-primary" href="/discover/hf/openai/whisper-base">Get Whisper Base</a><a class="btn" href="/discover?tab=hf&amp;task=automatic-speech-recognition">Browse speech models</a></div>
+</div>
+{% else %}
+{% if let Some(r) = running %}
+<div class="card running-card" role="status">
+  <div class="frame-row"><span class="spinner" aria-hidden="true"></span><b class="grow truncate">{{ r.label }}</b><span class="small muted">{{ r.percent }}% when this page opened</span></div>
+  <progress class="bar" max="100" value="{{ r.percent }}">{{ r.percent }}%</progress>
+  <div class="cluster tight"><a class="btn btn-primary btn-sm" href="/transcribe/{{ r.id }}">Watch progress</a><form method="post" action="/transcribe/{{ r.id }}/cancel"><button class="btn btn-sm" type="submit">Cancel</button></form></div>
+</div>
+{% endif %}
+
+<form class="card stack transcribe-form" method="post" action="/transcribe" enctype="multipart/form-data">
+  <label class="dropzone">
+    <svg class="icon icon-lg" aria-hidden="true"><use href="/assets/icons.svg#audio"></use></svg>
+    <span class="dropzone-title">Choose a recording — or drop it here</span>
+    <span class="small muted">WAV, MP3, FLAC, OGG or M4A{% if ffmpeg_available %}, or a video (its sound is used){% endif %} · up to 3 hours</span>
+    <input type="file" name="file" required accept="audio/*{% if ffmpeg_available %},video/*{% endif %}">
+  </label>
+  {% if !ffmpeg_available %}<p class="small muted">To transcribe videos, install ffmpeg (see <a href="/settings#media">Settings → Media</a>).</p>{% endif %}
+  <div class="param-grid">
+    <label class="field"><span>Model</span>
+      <select class="select" name="model_id">{% for m in models %}<option value="{{ m.value }}" {% if m.selected %}selected{% endif %}>{{ m.label }}</option>{% endfor %}</select>
+    </label>
+    <label class="field"><span>Spoken language</span>
+      <select class="select" name="language">{% for l in languages %}<option value="{{ l.value }}" {% if l.selected %}selected{% endif %}>{{ l.label }}</option>{% endfor %}</select>
+    </label>
+  </div>
+  <fieldset class="choice-row">
+    <legend>What should Whisper write?</legend>
+    <label class="choice"><input type="radio" name="task" value="transcribe" checked><span><b>The words as spoken</b><small class="muted">Same language as the recording</small></span></label>
+    <label class="choice"><input type="radio" name="task" value="translate"><span><b>An English translation</b><small class="muted">Works from any language Whisper knows (English-only “.en” models can't translate)</small></span></label>
+  </fieldset>
+  <div class="cluster"><button class="btn btn-primary btn-lg" type="submit"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#mic"></use></svg>Transcribe</button><span class="small muted">Long recordings take a while; you can keep using the app meanwhile.</span></div>
+</form>
+{% endif %}
+
+<section aria-labelledby="tx-history">
+  <h2 id="tx-history">Earlier transcripts</h2>
+  {% if history.is_empty() %}
+  <p class="muted">Nothing yet.</p>
+  {% else %}
+  <div class="tx-list">
+    {% for t in history %}
+    <a class="card tx-item" href="/transcribe/{{ t.id }}">
+      <div class="tx-top"><b class="truncate">{{ t.file_name }}</b><span class="badge badge-{{ t.status_class }}">{{ t.status }}</span></div>
+      {% if !t.preview.is_empty() %}<p class="tx-preview small">{{ t.preview }}</p>{% endif %}
+      {% if !t.error.is_empty() %}<p class="small problem">{{ t.error }}</p>{% endif %}
+      <span class="small muted">{{ t.task }} · {{ t.language }} · {{ t.model }} · {{ t.created }}{% if !t.duration.is_empty() %} · took {{ t.duration }}{% endif %}</span>
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

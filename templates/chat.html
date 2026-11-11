@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="chat-layout">
+  <input type="checkbox" id="conv-toggle" class="conv-toggle" aria-label="Show conversations">
+  <aside class="conv-pane" aria-label="Conversations">
+    <div class="conv-pane-head">
+      <label for="conv-toggle" class="btn btn-ghost btn-icon conv-close" title="Close"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#x"></use></svg><span class="sr-only">Close conversations</span></label>
+      <a class="btn btn-primary btn-block" href="/chat?new=1" accesskey="n"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#plus"></use></svg>New chat</a>
+    </div>
+    <nav class="conv-list">
+      {% if conversations.is_empty() %}<p class="muted small conv-empty">Your conversations will appear here.</p>{% endif %}
+      {% for c in conversations %}
+      <a href="/chat/{{ c.id }}" class="conv{% if c.active %} active{% endif %}" {% if c.active %}aria-current="page"{% endif %}><span class="conv-title truncate">{{ c.title }}</span><span class="conv-when">{{ c.when }}</span></a>
+      {% endfor %}
+    </nav>
+    <div class="conv-pane-foot">
+      <button type="button" class="btn btn-ghost btn-sm" popovertarget="import-chat"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#file"></use></svg>Import a chat</button>
+    </div>
+  </aside>
+
+  <section class="chat-main">
+    {% if has_conv %}
+    <header class="chat-head">
+      <label for="conv-toggle" class="btn btn-ghost btn-icon conv-toggle-btn" title="Conversations"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#chat"></use></svg><span class="sr-only">Conversations</span></label>
+      <div class="chat-title grow">
+        <h1 class="truncate">{{ title }}</h1>
+        <div class="chat-model small">
+          <span class="model-dot{% if model_missing %} is-missing{% endif %}" aria-hidden="true"></span>
+          <span class="truncate">{{ model_label }}</span>
+          {% if !engine_name.is_empty() %}<span class="muted hide-narrow">· {{ engine_name }}</span>{% endif %}
+          {% if !usage.is_empty() %}<span class="muted chat-usage hide-narrow">· {{ usage }}</span>{% endif %}
+        </div>
+      </div>
+      <button type="button" class="btn btn-sm" popovertarget="chat-settings" title="Chat settings"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#settings"></use></svg><span class="hide-narrow">Chat settings</span><span class="sr-only show-narrow">Chat settings</span></button>
+      <details class="menu menu-right">
+        <summary class="btn btn-sm btn-ghost" title="More"><span class="hide-narrow">More</span><span class="sr-only show-narrow">More</span><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#chevron-down"></use></svg></summary>
+        <div class="menu-body">
+          <button type="button" popovertarget="rename-chat">Rename</button>
+          <a href="/chat/{{ conv_id }}/export?format=md">Export as Markdown</a>
+          <a href="/chat/{{ conv_id }}/export?format=json">Export as JSON (re-importable)</a>
+          <button type="button" class="danger" popovertarget="delete-chat">Delete chat…</button>
+        </div>
+      </details>
+    </header>
+
+    {% if model_missing %}
+    <div class="notice notice-warn"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#alert"></use></svg><div>The model this chat used is no longer available{% if ollama_error.is_some() %} (Ollama isn't reachable){% endif %}. Pick another one in <b>Chat settings</b>.</div></div>
+    {% endif %}
+
+    <form class="composer{% if live %} is-generating{% endif %}" method="post" action="/chat/{{ conv_id }}/send" enctype="multipart/form-data">
+      <label class="sr-only" for="composer-text">Message</label>
+      <textarea id="composer-text" class="composer-input" name="text" rows="3" placeholder="Write a message…" {% if !live %}autofocus{% endif %}>{{ draft }}</textarea>
+      <div class="composer-bar">
+        <label class="attach" title="Attach images, audio or video — or drop files here">
+          <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#clip"></use></svg>
+          <span class="sr-only">Attach files</span>
+          <input type="file" name="files" multiple accept="image/*,audio/*,video/*">
+        </label>
+        <span class="composer-hint small muted">
+          {% if model_vision %}Images and video: yes.{% else %}Images: not supported by this model.{% endif %}
+          {% if whisper_available %} Audio: transcribed with Whisper.{% else %} Audio: needs a Whisper model.{% endif %}
+        </span>
+        <span class="gen-note small"><span class="spinner" aria-hidden="true"></span> Writing an answer…</span>
+        <button class="btn btn-primary btn-send" type="submit" accesskey="s" title="Send (Alt+S)"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#send"></use></svg>Send</button>
+        <button class="btn btn-danger btn-stop" type="submit" form="stop-form" accesskey="x" title="Stop (Alt+X)"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#stop"></use></svg>Stop</button>
+      </div>
+    </form>
+    <form id="stop-form" method="post" action="/chat/{{ conv_id }}/stop" target="las-control"></form>
+
+    <div class="thread-scroll" tabindex="0" aria-label="Messages">
+      <div class="thread">
+        {% if messages.is_empty() && !live %}
+        <div class="empty thread-empty"><svg class="icon icon-xl" aria-hidden="true"><use href="/assets/icons.svg#sparkles"></use></svg><p>Say hello, ask a question, or attach a picture.</p></div>
+        {% endif %}
+        {% for m in messages %}{% include "partials/message.html" %}{% endfor %}
+        {% if live %}{{ live_marker|safe }}{% endif %}
+        <div id="bottom"></div>
+      </div>
+    </div>
+    {% else %}
+    <div class="new-chat">
+      <header class="chat-head">
+        <label for="conv-toggle" class="btn btn-ghost btn-icon conv-toggle-btn" title="Conversations"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#chat"></use></svg><span class="sr-only">Conversations</span></label>
+        <h1 class="grow">New chat</h1>
+      </header>
+      {% if models.is_empty() %}
+      <div class="empty card">
+        <svg class="icon icon-xl" aria-hidden="true"><use href="/assets/icons.svg#chat"></use></svg>
+        <h2>No chat models yet</h2>
+        <p>Download one first — it takes a few minutes. Small models (about 1–2 GB) work on almost any computer.</p>
+        <div class="cluster center"><a class="btn btn-primary" href="/discover/hf/Qwen/Qwen2.5-1.5B-Instruct-GGUF">Get a starter model</a><a class="btn" href="/discover">Browse all models</a></div>
+        {% if let Some(e) = ollama_error %}<p class="small muted">Ollama models aren't listed: {{ e }}</p>{% endif %}
+      </div>
+      {% else %}
+      <form class="composer composer-new card" method="post" action="/chat/new" enctype="multipart/form-data">
+        <label class="field"><span>Model</span>
+          <select class="select" name="model_ref" required>
+            {% for m in models %}<option value="{{ m.value }}" {% if m.selected %}selected{% endif %}>{{ m.group }} · {{ m.label }}</option>{% endfor %}
+          </select>
+        </label>
+        <label class="sr-only" for="composer-text">Message</label>
+        <textarea id="composer-text" class="composer-input" name="text" rows="4" placeholder="Write your first message…" autofocus>{{ draft }}</textarea>
+        <div class="composer-bar">
+          <label class="attach" title="Attach images, audio or video — or drop files here">
+            <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#clip"></use></svg>
+            <span class="sr-only">Attach files</span>
+            <input type="file" name="files" multiple accept="image/*,audio/*,video/*">
+          </label>
+          <span class="composer-hint small muted">Images and video need a model marked “sees images”.</span>
+          <button class="btn btn-primary btn-send" type="submit" accesskey="s"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#send"></use></svg>Start chat</button>
+        </div>
+      </form>
+      <p class="small muted center">The system prompt and settings come from your defaults in <a href="/settings#generation">Settings</a>; you can change them per chat.</p>
+      {% endif %}
+    </div>
+    {% endif %}
+  </section>
+</div>
+
+<iframe name="las-control" class="control-frame" title="Background actions" tabindex="-1" aria-hidden="true"></iframe>
+
+<div id="import-chat" popover class="popover">
+  <div class="popover-head"><h2>Import a chat</h2><button type="button" class="btn btn-ghost btn-icon" popovertarget="import-chat" popovertargetaction="hide" title="Close"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#x"></use></svg><span class="sr-only">Close</span></button></div>
+  <form method="post" action="/chat/import" enctype="multipart/form-data" class="stack">
+    <label class="field"><span>JSON file exported from Local AI Studio (or a list of messages)</span><input class="input" type="file" name="file" accept=".json,application/json" required></label>
+    <button class="btn btn-primary" type="submit">Import</button>
+  </form>
+</div>
+
+{% if has_conv %}
+<div id="chat-settings" popover class="popover popover-wide">
+  <div class="popover-head"><h2>Chat settings</h2><button type="button" class="btn btn-ghost btn-icon" popovertarget="chat-settings" popovertargetaction="hide" title="Close"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#x"></use></svg><span class="sr-only">Close</span></button></div>
+  <form method="post" action="/chat/{{ conv_id }}/settings" class="stack">
+    <label class="field"><span>Model</span>
+      <select class="select" name="model_ref">
+        {% if model_missing %}<option value="" selected>— choose a model —</option>{% endif %}
+        {% for m in models %}<option value="{{ m.value }}" {% if m.selected %}selected{% endif %}>{{ m.group }} · {{ m.label }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="field"><span>System prompt <small class="muted">— instructions the model follows in this chat</small></span>
+      <textarea class="input" name="system_prompt" rows="3" placeholder="{{ default_system_prompt }}">{{ system_prompt }}</textarea>
+    </label>
+    <div class="param-grid">
+      <label class="field" data-tip="Higher = more creative and varied. Lower = more focused and repeatable. 0 always picks the most likely word."><span>Creativity (temperature)</span><input class="input" type="number" name="temperature" min="0" max="2" step="0.05" value="{{ params.temperature }}"></label>
+      <label class="field" data-tip="Only consider the most likely words whose probabilities add up to this share. 1 = consider everything."><span>Top-p</span><input class="input" type="number" name="top_p" min="0" max="1" step="0.01" value="{{ params.top_p }}"></label>
+      <label class="field" data-tip="Only consider this many of the most likely next words. 0 = no limit."><span>Top-k</span><input class="input" type="number" name="top_k" min="0" max="1000" step="1" value="{{ params.top_k }}"></label>
+      <label class="field" data-tip="The longest answer, in tokens (about ¾ of a word each)."><span>Max answer length</span><input class="input" type="number" name="max_tokens" min="1" max="32768" step="1" value="{{ params.max_tokens }}"></label>
+      <label class="field" data-tip="Above 1 discourages repeating the same words. 1 = off."><span>Repetition penalty</span><input class="input" type="number" name="repeat_penalty" min="0.5" max="2" step="0.01" value="{{ params.repeat_penalty }}"></label>
+      <label class="field" data-tip="How much of the conversation the model can see at once, in tokens. Larger needs more memory."><span>Context length</span><input class="input" type="number" name="context_length" min="256" max="262144" step="256" value="{{ params.context_length }}"></label>
+      <label class="field" data-tip="The same seed with the same settings repeats the same answer. Leave empty for random."><span>Seed</span><input class="input" type="text" inputmode="numeric" name="seed" value="{{ seed_text }}" placeholder="random"></label>
+    </div>
+    <p class="small muted">{% if engine_name.is_empty() %}Pick a model to see which settings it supports.{% else %}All of these settings are supported by {{ engine_name }}.{% if !model_vision %} This model doesn't accept images.{% endif %}{% endif %}</p>
+    <div class="cluster"><button class="btn btn-primary" type="submit">Save</button><button class="btn" type="submit" name="reset" value="1">Reset to my defaults</button></div>
+  </form>
+</div>
+
+<div id="rename-chat" popover class="popover">
+  <h3>Rename chat</h3>
+  <form method="post" action="/chat/{{ conv_id }}/rename" class="stack">
+    <input class="input" name="title" value="{{ title }}" maxlength="120" required aria-label="Title">
+    <div class="cluster"><button class="btn btn-primary" type="submit">Save</button><button type="button" class="btn" popovertarget="rename-chat" popovertargetaction="hide">Cancel</button></div>
+  </form>
+</div>
+
+<div id="delete-chat" popover class="popover confirm">
+  <h3>Delete this chat?</h3>
+  <p>All messages in “{{ title }}” are deleted. This can't be undone. (Export it first if you want a copy.)</p>
+  <div class="cluster"><form method="post" action="/chat/{{ conv_id }}/delete"><button class="btn btn-danger" type="submit">Delete</button></form><button type="button" class="btn" popovertarget="delete-chat" popovertargetaction="hide">Keep it</button></div>
+</div>
+{% endif %}
+{% endblock %}

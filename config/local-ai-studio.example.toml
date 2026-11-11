@@ -1,0 +1,85 @@
+# Example configuration for Local AI Studio.
+#
+# You normally never need to edit this file: every option is on the Settings page.
+# The app creates its real config.toml on first start in its data folder:
+#   Linux    ~/.local/share/local-ai-studio/config.toml
+#   macOS    ~/Library/Application Support/dev.LocalAIStudio.local-ai-studio/config.toml
+#   Windows  %APPDATA%\LocalAIStudio\local-ai-studio\data\config.toml
+# Edit it only while the app is stopped. Unknown keys are ignored; missing keys use the
+# defaults shown here. The Hugging Face token is never stored in this file — it lives in
+# your operating system's keychain (or the HF_TOKEN environment variable).
+
+[server]
+# Address to listen on. 127.0.0.1 means "this computer only" (recommended).
+host = "127.0.0.1"
+port = 8765
+# Open the browser automatically when the app starts.
+open_browser = true
+# Must be true before a network address such as 0.0.0.0 is accepted. Other devices then
+# need the access token shown in Settings → Server. Traffic is not encrypted.
+allow_network = false
+
+[ui]
+# midnight | graphite | neon | minimal | warm | glass
+theme = "midnight"
+# Clicking "Chat" opens the most recent conversation.
+restore_last_chat = true
+
+[storage]
+# Where downloaded models go (default: <data folder>/models).
+# models_dir = "/path/to/models"
+# Unfinished downloads (default: <models folder>/.partial). Keep it on the same drive.
+# downloads_dir = "/path/to/partial-downloads"
+# Generated images (default: <data folder>/outputs).
+# outputs_dir = "/path/to/pictures"
+# How many downloads run at the same time (1–6).
+max_concurrent_downloads = 2
+
+[ollama]
+enabled = true
+base_url = "http://127.0.0.1:11434"
+# How long Ollama keeps a model loaded after use: e.g. "5m", "1h", "0", "-1" (forever).
+keep_alive = "10m"
+
+[huggingface]
+endpoint = "https://huggingface.co"
+# Show gated models (license must be accepted on huggingface.co) in search results.
+show_gated = true
+
+[inference]
+# Which engine to prefer when a model runs in both: auto | builtin | ollama
+preferred_backend = "auto"
+# Hardware for the built-in engine: auto | cpu | cuda | metal
+# (cuda and metal only work in builds compiled with those features).
+acceleration = "auto"
+# Processor threads for the built-in engine. Default: automatic (the performance cores on
+# processors that have them, otherwise one per physical core). Applied at start-up.
+# threads = 8
+# Unload built-in models after this many idle minutes (0 = never).
+unload_after_minutes = 15
+# Built-in chat models kept in memory at the same time (1–8).
+max_loaded_models = 1
+
+[generation]
+# Defaults for new chats; each chat can change them.
+temperature = 0.7
+top_p = 0.9
+top_k = 40
+max_tokens = 1024
+repeat_penalty = 1.1
+context_length = 4096
+# A fixed seed makes answers repeatable (default: random).
+# seed = 42
+system_prompt = "You are a helpful assistant."
+
+[logging]
+# error | warn | info | debug | trace
+level = "info"
+# Also write daily log files to <data folder>/logs.
+to_file = true
+
+[media]
+# Path to ffmpeg, used for video frames and video sound (default: searched on PATH).
+# ffmpeg_path = "/usr/bin/ffmpeg"
+# Still pictures taken from a video for vision models (1–16).
+video_frames = 6

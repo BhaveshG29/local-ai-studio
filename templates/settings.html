@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Settings</h1>
+    <p class="lead">Everything is saved on this computer in <span class="mono break">{{ config_file }}</span>. Your Hugging Face token is never written there.</p>
+  </div>
+</header>
+
+<div class="settings-layout">
+  <nav class="settings-toc" aria-label="Settings sections">
+    <a href="#appearance">Appearance</a>
+    <a href="#storage">Storage</a>
+    <a href="#huggingface">Hugging Face</a>
+    <a href="#ollama">Ollama</a>
+    <a href="#inference">Inference</a>
+    <a href="#generation">Chat defaults</a>
+    <a href="#server">Server</a>
+    <a href="#media">Media</a>
+    <a href="#logging">Logging</a>
+    <a href="#data">Data &amp; cache</a>
+    <a href="#about">About</a>
+  </nav>
+
+  <div class="settings-body">
+    <section class="card settings-section" id="appearance">
+      <h2>Appearance</h2>
+      <p class="muted small">Pick a look. It changes right away and is remembered.</p>
+      <div class="theme-grid">
+        {% for t in ctx.themes %}
+        <form method="post" action="/settings/theme">
+          <input type="hidden" name="theme" value="{{ t.slug }}">
+          <input type="hidden" name="back" value="/settings#appearance">
+          <button type="submit" class="theme-card{% if t.active %} is-active{% endif %}" data-theme="{{ t.slug }}" aria-pressed="{% if t.active %}true{% else %}false{% endif %}">
+            <span class="tp" aria-hidden="true">
+              <span class="tp-side"><i></i><i></i><i></i></span>
+              <span class="tp-main"><span class="tp-bubble"></span><span class="tp-bubble tp-me"></span><span class="tp-btn"></span></span>
+            </span>
+            <span class="theme-card-name">{{ t.label }}{% if t.active %} <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#check"></use></svg>{% endif %}</span>
+            <span class="theme-card-desc">{{ t.description }}</span>
+            <span class="theme-card-mode">{% if t.dark %}Dark{% else %}Light{% endif %}</span>
+          </button>
+        </form>
+        {% endfor %}
+      </div>
+      <form method="post" action="/settings/save/ui" class="stack">
+        <label class="check"><input type="checkbox" name="restore_last_chat" {% if s.ui.restore_last_chat %}checked{% endif %}> Open my last chat when I click <b>Chat</b></label>
+        <div><button class="btn btn-primary" type="submit">Save</button></div>
+      </form>
+    </section>
+
+    <section class="card settings-section" id="storage">
+      <h2>Storage</h2>
+      <p class="small muted">Models use <b>{{ models_size }}</b> · <b>{{ free_space }}</b> free on that drive.</p>
+      <form method="post" action="/settings/save/storage" class="stack">
+        <label class="field"><span>Models folder</span><input class="input mono" name="models_dir" value="{{ models_dir_set }}" placeholder="{{ default_models_dir }}"></label>
+        <p class="small muted hint">Leave empty for the default. New downloads go to the new folder; models you already have keep working where they are.</p>
+        <label class="field"><span>Folder for unfinished downloads</span><input class="input mono" name="downloads_dir" value="{{ downloads_dir_set }}" placeholder="{{ partial_dir }}"></label>
+        <p class="small muted hint">Keep it on the same drive as the models folder so finished files are moved instantly instead of copied.</p>
+        <label class="field"><span>Pictures folder (image generation)</span><input class="input mono" name="outputs_dir" value="{{ outputs_dir_set }}" placeholder="{{ default_outputs_dir }}"></label>
+        <label class="field narrow"><span>Downloads at the same time</span><input class="input" type="number" name="max_concurrent_downloads" min="1" max="6" value="{{ s.storage.max_concurrent_downloads }}"></label>
+        <div><button class="btn btn-primary" type="submit">Save</button></div>
+      </form>
+    </section>
+
+    <section class="card settings-section" id="huggingface">
+      <h2>Hugging Face</h2>
+      <p class="small muted">Most models download without an account. Some (“gated”) models, such as Llama and Gemma, need you to accept their license on huggingface.co and add an access token here.</p>
+      <div class="status-line">
+        {% if token_set %}<span class="badge badge-ok">Token set</span> <span class="mono">{{ token_masked }}</span> <span class="muted small">· {{ token_label }}</span>
+        {% else %}<span class="badge badge-muted">No token</span>{% endif %}
+      </div>
+      {% if token_from_env %}
+      <p class="small">The token comes from the <span class="mono">HF_TOKEN</span> environment variable, so it can't be changed here. Remove the variable to manage the token in the app.</p>
+      <form method="post" action="/settings/hf-token"><input type="hidden" name="action" value="verify"><button class="btn" type="submit">Check that it works</button></form>
+      {% else %}
+      <form method="post" action="/settings/hf-token" class="stack">
+        <input type="hidden" name="action" value="save">
+        <label class="field"><span>Access token (starts with <span class="mono">hf_</span>)</span><input class="input mono" type="password" name="token" autocomplete="off" spellcheck="false" placeholder="hf_…" required></label>
+        <p class="small muted hint">Create a “Read” token at huggingface.co → Settings → Access Tokens. {% if keychain_available %}It is stored in your system keychain, not in a file.{% else %}No system keychain is available, so the token is kept in memory only until Local AI Studio stops. To keep it, set the <span class="mono">HF_TOKEN</span> environment variable instead.{% endif %}</p>
+        <div class="cluster"><button class="btn btn-primary" type="submit">Save token</button></div>
+      </form>
+      <div class="cluster tight">
+        {% if cli_token_available %}<form method="post" action="/settings/hf-token"><input type="hidden" name="action" value="import-cli"><button class="btn" type="submit" title="Use the token saved by the huggingface-cli login command">Use my Hugging Face CLI login</button></form>{% endif %}
+        {% if token_set %}
+        <form method="post" action="/settings/hf-token"><input type="hidden" name="action" value="verify"><button class="btn" type="submit">Check that it works</button></form>
+        <form method="post" action="/settings/hf-token"><input type="hidden" name="action" value="clear"><button class="btn btn-ghost danger" type="submit">Remove token</button></form>
+        {% endif %}
+      </div>
+      {% endif %}
+      <form method="post" action="/settings/save/huggingface" class="stack sep-top">
+        <label class="check"><input type="checkbox" name="show_gated" {% if s.huggingface.show_gated %}checked{% endif %}> Show gated models in search results</label>
+        <label class="field"><span>Hub address <small class="muted">(only change this for a mirror)</small></span><input class="input mono" name="endpoint" value="{{ s.huggingface.endpoint }}" placeholder="https://huggingface.co"></label>
+        <div><button class="btn btn-primary" type="submit">Save</button></div>
+      </form>
+    </section>
+
+    <section class="card settings-section" id="ollama">
+      <h2>Ollama</h2>
+      <p class="small muted">Ollama is a separate free app that runs many models (including ones that see images) and can use your graphics card. Local AI Studio works with or without it.</p>
+      <div class="status-line">
+        {% if ollama_running %}<span class="badge badge-ok">Running</span>{% if !ollama_version.is_empty() %} <span class="muted small">version {{ ollama_version }}</span>{% endif %}
+        {% else %}<span class="badge badge-muted">Not running</span>{% endif %}
+      </div>
+      {% if !ollama_running %}
+      <details class="disclosure" {% if s.ollama.enabled %}open{% endif %}>
+        <summary>How to install Ollama on {{ ollama_os }}</summary>
+        <ol class="steps">{% for step in ollama_steps %}<li>{{ step }}</li>{% endfor %}</ol>
+        <p class="small muted">Then reload this page. If Ollama runs on another address, enter it below.</p>
+      </details>
+      {% endif %}
+      <form method="post" action="/settings/save/ollama" class="stack">
+        <label class="check"><input type="checkbox" name="enabled" {% if s.ollama.enabled %}checked{% endif %}> Use Ollama</label>
+        <label class="field"><span>Address</span><input class="input mono" name="base_url" value="{{ s.ollama.base_url }}" placeholder="http://127.0.0.1:11434"></label>
+        <label class="field narrow"><span>Keep models loaded for</span><input class="input mono" name="keep_alive" value="{{ s.ollama.keep_alive }}" placeholder="10m"></label>
+        <p class="small muted hint">Examples: <span class="mono">5m</span>, <span class="mono">1h</span>, <span class="mono">0</span> (unload right away), <span class="mono">-1</span> (keep loaded).</p>
+        <div><button class="btn btn-primary" type="submit">Save</button></div>
+      </form>
+    </section>
+
+    <section class="card settings-section" id="inference">
+      <h2>Inference</h2>
+      <form method="post" action="/settings/save/inference" class="stack">
+        <label class="field"><span>When a model can run in both engines</span>
+          <select class="select" name="preferred_backend">{% for o in backends %}<option value="{{ o.value }}" {% if o.selected %}selected{% endif %}>{{ o.label }}</option>{% endfor %}</select>
+        </label>
+        <label class="field"><span>Hardware for the built-in engine</span>
+          <select class="select" name="acceleration">{% for o in accels %}<option value="{{ o.value }}" {% if o.selected %}selected{% endif %}>{{ o.label }}</option>{% endfor %}</select>
+        </label>
+        <ul class="small muted plain">
+          {% for n in accel_notes %}{% if !n.is_empty() %}<li>{{ n }}</li>{% endif %}{% endfor %}
+          {% if !cuda_build && !metal_build %}<li>This copy was built for the CPU only. GPU builds are described in the README (they need the NVIDIA CUDA toolkit or a Mac).</li>{% endif %}
+        </ul>
+        <div class="param-grid">
+          <label class="field" data-tip="Empty = automatic: prompts are read with all threads and answers written with the fastest cores. A number here is used for both. Takes effect after a restart."><span>Processor threads</span><input class="input" type="number" name="threads" min="1" max="512" value="{{ threads_text }}" placeholder="automatic"></label>
+          <label class="field" data-tip="Free memory by unloading models nobody has used for this long. 0 = never."><span>Unload unused models after (minutes)</span><input class="input" type="number" name="unload_after_minutes" min="0" max="10080" value="{{ s.inference.unload_after_minutes }}"></label>
+          <label class="field" data-tip="Loading another model unloads the least recently used one beyond this number."><span>Chat models kept in memory</span><input class="input" type="number" name="max_loaded_models" min="1" max="8" value="{{ s.inference.max_loaded_models }}"></label>
+        </div>
+        <div><button class="btn btn-primary" type="submit">Save</button></div>
+      </form>
+    </section>
+
+    <section class="card settings-section" id="generation">
+      <h2>Chat defaults</h2>
+      <p class="small muted">New chats start with these. Each chat can change them in its <b>Chat settings</b>.</p>
+      <form method="post" action="/settings/save/generation" class="stack">
+        <label class="field"><span>System prompt</span><textarea class="input" name="system_prompt" rows="3" placeholder="You are a helpful assistant.">{{ s.generation.system_prompt }}</textarea></label>
+        <div class="param-grid">
+          <label class="field" data-tip="Higher = more creative and varied. Lower = more focused."><span>Creativity (temperature)</span><input class="input" type="number" name="temperature" min="0" max="2" step="0.05" value="{{ s.generation.temperature }}"></label>
+          <label class="field"><span>Top-p</span><input class="input" type="number" name="top_p" min="0" max="1" step="0.01" value="{{ s.generation.top_p }}"></label>
+          <label class="field"><span>Top-k</span><input class="input" type="number" name="top_k" min="0" max="1000" value="{{ s.generation.top_k }}"></label>
+          <label class="field"><span>Max answer length (tokens)</span><input class="input" type="number" name="max_tokens" min="1" max="32768" value="{{ s.generation.max_tokens }}"></label>
+          <label class="field"><span>Repetition penalty</span><input class="input" type="number" name="repeat_penalty" min="0.5" max="2" step="0.01" value="{{ s.generation.repeat_penalty }}"></label>
+          <label class="field"><span>Context length (tokens)</span><input class="input" type="number" name="context_length" min="256" max="262144" step="256" value="{{ s.generation.context_length }}"></label>
+          <label class="field"><span>Seed</span><input class="input" type="text" inputmode="numeric" name="seed" value="{{ seed_text }}" placeholder="random"></label>
+        </div>
+        <div><button class="btn btn-primary" type="submit">Save</button></div>
+      </form>
+    </section>
+
+    <section class="card settings-section" id="server">
+      <h2>Server</h2>
+      <p class="small muted">Local AI Studio is a small web server on this computer. Right now it answers at <span class="mono">{{ server_url }}</span>.</p>
+      {% if show_token %}
+      <div class="notice notice-warn"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#lock"></use></svg><div>Other devices need this access token: <span class="mono select-all">{{ access_token }}</span><br><span class="small">It changes every time Local AI Studio starts. Anyone with it can use your models.</span></div></div>
+      {% endif %}
+      <form method="post" action="/settings/save/server" class="stack">
+        <div class="param-grid">
+          <label class="field"><span>Address to listen on</span><input class="input mono" name="host" value="{{ s.server.host }}" placeholder="127.0.0.1"></label>
+          <label class="field"><span>Port</span><input class="input" type="number" name="port" min="1024" max="65535" value="{{ s.server.port }}"></label>
+        </div>
+        <label class="check"><input type="checkbox" name="open_browser" {% if s.server.open_browser %}checked{% endif %}> Open the browser when Local AI Studio starts</label>
+        <label class="check warn-check"><input type="checkbox" name="allow_network" {% if s.server.allow_network %}checked{% endif %}> Allow access from other devices on my network</label>
+        <p class="small hint"><b>Security:</b> keep this off unless you need it. When it's on <em>and</em> the address is a network address (for example <span class="mono">0.0.0.0</span>), other devices can reach the app after entering an access token. Traffic is not encrypted, so only use it on a network you trust.</p>
+        <div><button class="btn btn-primary" type="submit">Save</button> <span class="small muted">Takes effect after a restart.</span></div>
+      </form>
+    </section>
+
+    <section class="card settings-section" id="media">
+      <h2>Media</h2>
+      <p class="small">
+        {% if ffmpeg_found.is_empty() %}<span class="badge badge-muted">ffmpeg not found</span> Video in chats and transcribing videos need ffmpeg. {{ ffmpeg_hint }}
+        {% else %}<span class="badge badge-ok">ffmpeg found</span> <span class="mono small break">{{ ffmpeg_found }}</span>{% endif %}
+      </p>
+      <form method="post" action="/settings/save/media" class="stack">
+        <label class="field"><span>ffmpeg program <small class="muted">(leave empty to find it automatically)</small></span><input class="input mono" name="ffmpeg_path" value="{{ ffmpeg_path_set }}" placeholder="/usr/bin/ffmpeg"></label>
+        <label class="field narrow"><span>Frames taken from a video for the model</span><input class="input" type="number" name="video_frames" min="1" max="16" value="{{ s.media.video_frames }}"></label>
+        <p class="small muted hint">A model “watches” a video by looking at this many evenly spaced still pictures (and the sound, if a Whisper model is installed). More frames = more detail, but slower.</p>
+        <div><button class="btn btn-primary" type="submit">Save</button></div>
+      </form>
+    </section>
+
+    <section class="card settings-section" id="logging">
+      <h2>Logging</h2>
+      <form method="post" action="/settings/save/logging" class="stack">
+        <label class="field narrow"><span>Detail level</span>
+          <select class="select" name="level">{% for o in log_levels %}<option value="{{ o.value }}" {% if o.selected %}selected{% endif %}>{{ o.label }}</option>{% endfor %}</select>
+        </label>
+        <label class="check"><input type="checkbox" name="to_file" {% if s.logging.to_file %}checked{% endif %}> Also write logs to files (one per day)</label>
+        <p class="small muted hint">Logs never contain your Hugging Face token or your chats. At the “debug” and “trace” levels they include page addresses, which can contain search words or image prompts. Logs are in <span class="mono break">{{ logs_dir }}</span>.</p>
+        <div class="cluster"><button class="btn btn-primary" type="submit">Save</button><button class="btn" type="submit" formaction="/settings/data/open-logs" formnovalidate>Open logs folder</button></div>
+      </form>
+    </section>
+
+    <section class="card settings-section" id="data">
+      <h2>Data &amp; cache</h2>
+      <dl class="kv">
+        <dt>Conversations</dt><dd>{{ conversation_count }}</dd>
+        <dt>Uploaded files</dt><dd>{{ uploads_size }}</dd>
+        <dt>Saved web pages (cache)</dt><dd>{{ cache_entries }} · {{ cache_size }}</dd>
+        <dt>Offline model index</dt><dd>{{ index_counts }}</dd>
+        <dt>Data folder</dt><dd class="mono break">{{ data_dir }}</dd>
+      </dl>
+      <div class="action-list">
+        <div class="action-row"><div><b>Download all conversations</b><p class="small muted">One JSON file you can import again.</p></div><form method="post" action="/settings/data/export-all"><button class="btn" type="submit"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#download"></use></svg>Download</button></form></div>
+        <div class="action-row"><div><b>Open the data folder</b><p class="small muted">Where conversations, uploads and settings live.</p></div><form method="post" action="/settings/data/open-data"><button class="btn" type="submit"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#folder"></use></svg>Open</button></form></div>
+        <div class="action-row"><div><b>Clear the web cache</b><p class="small muted">Saved model lists and pages. They are fetched again when needed.</p></div><form method="post" action="/settings/data/clear-cache"><button class="btn" type="submit">Clear</button></form></div>
+        <div class="action-row"><div><b>Clear the offline index</b><p class="small muted">The searchable list built on Discover → Offline index.</p></div><form method="post" action="/settings/data/clear-index"><button class="btn" type="submit">Clear</button></form></div>
+        <div class="action-row"><div><b>Delete unused uploads</b><p class="small muted">Files no conversation or transcript uses any more.</p></div><form method="post" action="/settings/data/clear-uploads"><button class="btn" type="submit">Delete</button></form></div>
+        <div class="action-row"><div><b>Delete all conversations</b><p class="small muted">Can't be undone. Download them first if unsure.</p></div><button type="button" class="btn btn-danger" popovertarget="confirm-del-convs">Delete all…</button></div>
+        <div class="action-row"><div><b>Reset all settings</b><p class="small muted">Back to the defaults. Models and conversations are kept.</p></div><button type="button" class="btn btn-ghost danger" popovertarget="confirm-reset">Reset…</button></div>
+      </div>
+    </section>
+
+    <section class="card settings-section" id="about">
+      <h2>About</h2>
+      <dl class="kv">
+        <dt>Version</dt><dd>{{ ctx.version }}</dd>
+        <dt>License</dt><dd>Apache License 2.0</dd>
+        <dt>Made by</dt><dd>Bhavesh G and Claude</dd>
+      </dl>
+      <p class="small muted">Models are made and licensed by their publishers; Local AI Studio only downloads and runs them. Check each model's license before using it. <a href="/about/licenses">Open-source licenses</a></p>
+      <div class="cluster"><button type="button" class="btn" popovertarget="confirm-stop"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#power"></use></svg>Stop Local AI Studio</button></div>
+    </section>
+  </div>
+</div>
+
+<div id="confirm-del-convs" popover class="popover confirm">
+  <h3>Delete all {{ conversation_count }} conversations?</h3>
+  <p>Every message is deleted permanently. Models and settings are not affected.</p>
+  <div class="cluster"><form method="post" action="/settings/data/delete-conversations"><button class="btn btn-danger" type="submit">Delete everything</button></form><button type="button" class="btn" popovertarget="confirm-del-convs" popovertargetaction="hide">Cancel</button></div>
+</div>
+<div id="confirm-reset" popover class="popover confirm">
+  <h3>Reset all settings?</h3>
+  <p>The theme, folders, chat defaults and server settings go back to their defaults. Your saved Hugging Face token is kept.</p>
+  <div class="cluster"><form method="post" action="/settings/data/reset-settings"><button class="btn btn-danger" type="submit">Reset</button></form><button type="button" class="btn" popovertarget="confirm-reset" popovertargetaction="hide">Cancel</button></div>
+</div>
+<div id="confirm-stop" popover class="popover confirm">
+  <h3>Stop Local AI Studio?</h3>
+  <p>Any answer being written is saved and downloads are paused. This page will stop working until you start the app again.</p>
+  <div class="cluster"><form method="post" action="/settings/shutdown"><button class="btn btn-danger" type="submit">Stop</button></form><button type="button" class="btn" popovertarget="confirm-stop" popovertargetaction="hide">Keep running</button></div>
+</div>
+{% endblock %}

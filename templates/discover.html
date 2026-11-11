@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Discover models</h1>
+    <p class="lead">Browse Hugging Face and the Ollama library. Only information is loaded here — nothing is downloaded until you press Download.</p>
+  </div>
+</header>
+
+<nav class="tabs" aria-label="Catalog">
+  <a href="/discover?tab=hf" {% if tab == "hf" %}class="active" aria-current="page"{% endif %}>Hugging Face</a>
+  <a href="/discover?tab=ollama" {% if tab == "ollama" %}class="active" aria-current="page"{% endif %}>Ollama library</a>
+  <a href="/discover?tab=index" {% if tab == "index" %}class="active" aria-current="page"{% endif %}>Offline index</a>
+</nav>
+
+{% if tab == "hf" %}
+<form class="filters card" method="get" action="/discover" role="search">
+  <input type="hidden" name="tab" value="hf">
+  <label class="field grow-2"><span>Search</span><input class="input" type="search" name="q" value="{{ q }}" placeholder="e.g. qwen, llama 3.2, whisper" accesskey="k" autofocus></label>
+  <label class="field"><span>Task</span><select class="select" name="task">{% for o in hf_tasks %}<option value="{{ o.value }}" {% if o.selected %}selected{% endif %}>{{ o.label }}</option>{% endfor %}</select></label>
+  <label class="field"><span>Format</span><select class="select" name="format">{% for o in hf_formats %}<option value="{{ o.value }}" {% if o.selected %}selected{% endif %}>{{ o.label }}</option>{% endfor %}</select></label>
+  <label class="field"><span>Family</span><select class="select" name="arch">{% for o in hf_archs %}<option value="{{ o.value }}" {% if o.selected %}selected{% endif %}>{{ o.label }}</option>{% endfor %}</select></label>
+  <label class="field"><span>Sort by</span><select class="select" name="sort">{% for o in hf_sorts %}<option value="{{ o.value }}" {% if o.selected %}selected{% endif %}>{{ o.label }}</option>{% endfor %}</select></label>
+  <label class="field"><span>Author</span><input class="input" type="text" name="author" value="{{ hf_author }}" placeholder="e.g. Qwen"></label>
+  <div class="field field-actions"><button class="btn btn-primary" type="submit"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#search"></use></svg>Search</button></div>
+</form>
+<p class="muted small hint-line"><b>Tip:</b> choose <i>Format: GGUF</i> for models the built-in engine runs fastest on a normal computer.</p>
+{% if let Some(e) = hf_error %}
+<div class="notice notice-error" role="alert"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#alert"></use></svg><div>{{ e }}</div></div>
+{% endif %}
+{% if let Some(c) = hf_cached_at %}
+<div class="notice notice-info"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#info"></use></svg><div>Hugging Face is unreachable — showing results saved {{ c }}.</div></div>
+{% endif %}
+{% if let Some(r) = hf_rate %}<p class="muted small">{{ r }}</p>{% endif %}
+{% if hf_cards.is_empty() && hf_error.is_none() %}
+<div class="empty card"><svg class="icon icon-xl" aria-hidden="true"><use href="/assets/icons.svg#search"></use></svg><p>No models match. Try a shorter search or fewer filters.</p></div>
+{% endif %}
+<div class="grid grid-cards">
+  {% for m in hf_cards %}
+  <a class="card card-link model-card" href="{{ m.href }}">
+    <div class="model-card-head">
+      <span class="model-author">{{ m.author }}</span>
+      {% if m.gated %}<span class="badge badge-warn" title="You must accept the license on huggingface.co and add a token"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#lock"></use></svg>Gated</span>{% endif %}
+    </div>
+    <h3 class="model-name">{{ m.name }}</h3>
+    <div class="cluster tight">
+      {% if !m.task.is_empty() %}<span class="chip">{{ m.task }}</span>{% endif %}
+      {% for f in m.formats %}<span class="chip chip-outline">{{ f }}</span>{% endfor %}
+      {% if !m.params.is_empty() %}<span class="chip chip-outline">{{ m.params }} params</span>{% endif %}
+    </div>
+    <div class="model-stats">
+      <span title="Downloads"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#download"></use></svg>{{ m.downloads }}</span>
+      <span title="Likes"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#heart"></use></svg>{{ m.likes }}</span>
+      {% if !m.updated.is_empty() %}<span>{{ m.updated }}</span>{% endif %}
+      {% if !m.license.is_empty() %}<span class="truncate">{{ m.license }}</span>{% endif %}
+    </div>
+  </a>
+  {% endfor %}
+</div>
+<nav class="pager" aria-label="Pages">
+  {% if let Some(f) = hf_first %}<a class="btn" href="{{ f }}"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#chevron-left"></use></svg>First page</a>{% endif %}
+  {% if let Some(n) = hf_next %}<a class="btn" href="{{ n }}">Next page<svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#chevron-right"></use></svg></a>{% endif %}
+</nav>
+{% endif %}
+
+{% if tab == "ollama" %}
+{% if !ol_running %}
+<div class="notice notice-warn"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#alert"></use></svg><div><b>Ollama isn't running on this computer.</b> You can browse, but downloads need Ollama. See <a href="/settings#ollama">Settings → Ollama</a> for how to install or start it.</div></div>
+{% endif %}
+<form class="filters card" method="get" action="/discover" role="search">
+  <input type="hidden" name="tab" value="ollama">
+  <label class="field grow-2"><span>Search</span><input class="input" type="search" name="q" value="{{ q }}" placeholder="e.g. llama, gemma, qwen" accesskey="k" autofocus></label>
+  <label class="field"><span>Show</span><select class="select" name="cap">{% for o in ol_caps %}<option value="{{ o.value }}" {% if o.selected %}selected{% endif %}>{{ o.label }}</option>{% endfor %}</select></label>
+  <label class="field"><span>Sort by</span><select class="select" name="sort">{% for o in ol_sorts %}<option value="{{ o.value }}" {% if o.selected %}selected{% endif %}>{{ o.label }}</option>{% endfor %}</select></label>
+  <div class="field field-actions"><button class="btn btn-primary" type="submit"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#search"></use></svg>Search</button></div>
+</form>
+{% if let Some(e) = ol_error %}
+<div class="notice notice-error" role="alert"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#alert"></use></svg><div>{{ e }}</div></div>
+{% endif %}
+{% if let Some(c) = ol_cached_at %}
+<div class="notice notice-info"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#info"></use></svg><div>ollama.com is unreachable — showing results saved {{ c }}.</div></div>
+{% endif %}
+{% if ol_cards.is_empty() && ol_error.is_none() %}
+<div class="empty card"><svg class="icon icon-xl" aria-hidden="true"><use href="/assets/icons.svg#search"></use></svg><p>No models match your search.</p></div>
+{% endif %}
+<div class="grid grid-cards">
+  {% for m in ol_cards %}
+  <a class="card card-link model-card" href="{{ m.href }}">
+    <div class="model-card-head"><span class="model-author">ollama.com</span>{% if m.cloud_only %}<span class="badge badge-muted" title="Runs on Ollama's servers, not on your computer">Cloud only</span>{% endif %}</div>
+    <h3 class="model-name">{{ m.name }}</h3>
+    <p class="muted clamp-2">{{ m.description }}</p>
+    <div class="cluster tight">
+      {% for c in m.capabilities %}<span class="chip{% if c == "vision" %} chip-accent{% endif %}">{% if c == "vision" %}sees images{% else %}{{ c }}{% endif %}</span>{% endfor %}
+      {% for s in m.sizes %}<span class="chip chip-outline">{{ s }}</span>{% endfor %}
+    </div>
+    <div class="model-stats">
+      {% if !m.pulls.is_empty() %}<span title="Downloads"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#download"></use></svg>{{ m.pulls }}</span>{% endif %}
+      {% if !m.tags.is_empty() %}<span>{{ m.tags }} versions</span>{% endif %}
+      {% if !m.updated.is_empty() %}<span>updated {{ m.updated }}</span>{% endif %}
+    </div>
+  </a>
+  {% endfor %}
+</div>
+<nav class="pager" aria-label="Pages">
+  {% if let Some(n) = ol_next %}<a class="btn" href="{{ n }}">More models<svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#chevron-right"></use></svg></a>{% endif %}
+</nav>
+{% endif %}
+
+{% if tab == "index" %}
+<section class="card">
+  <div class="section-head">
+    <div>
+      <h2>Offline index</h2>
+      <p class="muted small">A searchable copy of model information seen in Discover, stored on this computer. Works without internet. Last updated: {{ ix_last }}.{% for c in ix_counts %} {{ c.1 }} from {{ c.0 }}.{% endfor %}</p>
+    </div>
+    <form method="post" action="/discover/index/refresh">
+      <button class="btn" type="submit" {% if ix_running %}disabled{% endif %}><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#refresh"></use></svg>{% if ix_running %}Updating…{% else %}Update index{% endif %}</button>
+    </form>
+  </div>
+  {% if ix_running %}
+  <p class="small"><span class="spinner" aria-hidden="true"></span> {{ ix_stage }} — {{ ix_indexed }} models indexed so far. This page refreshes by itself.</p>
+  {% endif %}
+  {% if !ix_errors.is_empty() %}
+  <ul class="small muted">{% for e in ix_errors %}<li>{{ e }}</li>{% endfor %}</ul>
+  {% endif %}
+</section>
+<form class="filters card" method="get" action="/discover" role="search">
+  <input type="hidden" name="tab" value="index">
+  <label class="field grow-2"><span>Search</span><input class="input" type="search" name="q" value="{{ q }}" placeholder="Search the offline index" accesskey="k" autofocus></label>
+  <label class="field"><span>Source</span><select class="select" name="source">{% for o in ix_sources %}<option value="{{ o.value }}" {% if o.selected %}selected{% endif %}>{{ o.label }}</option>{% endfor %}</select></label>
+  <label class="field"><span>Task</span><select class="select" name="task">{% for o in ix_tasks %}<option value="{{ o.value }}" {% if o.selected %}selected{% endif %}>{{ o.label }}</option>{% endfor %}</select></label>
+  <label class="field"><span>Sort by</span><select class="select" name="sort">{% for o in ix_sorts %}<option value="{{ o.value }}" {% if o.selected %}selected{% endif %}>{{ o.label }}</option>{% endfor %}</select></label>
+  <div class="field field-actions"><button class="btn btn-primary" type="submit">Search</button></div>
+</form>
+{% if ix_rows.is_empty() %}
+<div class="empty card"><svg class="icon icon-xl" aria-hidden="true"><use href="/assets/icons.svg#disk"></use></svg><p>{% if ix_total == 0 && q.is_empty() %}The index is empty. Press <b>Update index</b>, or browse the other tabs — what you see is added automatically.{% else %}Nothing in the index matches.{% endif %}</p></div>
+{% else %}
+<p class="muted small">{{ ix_total }} {% if ix_total == 1 %}result{% else %}results{% endif %}</p>
+<div class="table-wrap card">
+<table class="table">
+  <thead><tr><th>Model</th><th>Source</th><th>Task</th><th>Size</th><th class="num">Downloads</th></tr></thead>
+  <tbody>
+  {% for r in ix_rows %}
+  <tr>
+    <td><a href="{{ r.href }}"><b>{{ r.name }}</b></a><div class="muted small">{{ r.author }}{% if !r.description.is_empty() %} · {{ r.description }}{% endif %}</div></td>
+    <td><span class="badge {% if r.source == "Ollama" %}badge-info{% else %}badge-accent{% endif %}">{{ r.source }}</span></td>
+    <td>{{ r.task }}</td>
+    <td>{{ r.params }}</td>
+    <td class="num">{{ r.downloads }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<nav class="pager" aria-label="Pages">
+  {% if let Some(p) = ix_prev %}<a class="btn" href="{{ p }}"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#chevron-left"></use></svg>Previous</a>{% endif %}
+  {% if let Some(n) = ix_next %}<a class="btn" href="{{ n }}">Next<svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#chevron-right"></use></svg></a>{% endif %}
+</nav>
+{% endif %}
+{% endif %}
+{% endblock %}

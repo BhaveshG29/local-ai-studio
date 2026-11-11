@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block content %}
+<nav class="crumbs" aria-label="Breadcrumb"><a href="/discover?tab=ollama">Ollama library</a><span aria-hidden="true">/</span><span>{{ name }}</span></nav>
+<header class="page-head">
+  <div>
+    <h1 class="break">{{ name }}</h1>
+    {% if !description.is_empty() %}<p class="lead">{{ description }}</p>{% endif %}
+  </div>
+  <div class="head-stats">
+    <a class="btn btn-ghost btn-sm" href="{{ library_url }}" rel="noopener noreferrer" target="_blank"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#external"></use></svg>Open on ollama.com</a>
+  </div>
+</header>
+
+{% if let Some(c) = cached_at %}
+<div class="notice notice-info"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#info"></use></svg><div>ollama.com is unreachable — showing information saved {{ c }}.</div></div>
+{% endif %}
+{% if !running %}
+<div class="notice notice-warn"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#alert"></use></svg>
+  <div><b>Ollama isn't running</b>, so these models can't be downloaded yet. On {{ install_os }}:
+    <ol class="small">{% for s in install_steps %}<li><code class="selectable">{{ s }}</code></li>{% endfor %}</ol>
+  </div>
+</div>
+{% endif %}
+
+<section class="card">
+  <div class="section-head"><h2>Versions</h2><span class="muted small">Smaller versions are faster and need less memory; larger ones are smarter.</span></div>
+  <div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>Version</th><th class="num">Size</th><th>Context</th><th>Input</th><th>Fits this computer?</th><th></th></tr></thead>
+    <tbody>
+    {% for t in tags %}
+    <tr>
+      <td><b class="mono">{{ t.tag }}</b>{% if !t.updated.is_empty() %}<div class="muted small">{{ t.updated }}</div>{% endif %}</td>
+      <td class="num">{{ t.size }}</td>
+      <td>{{ t.context }}</td>
+      <td>{% if t.vision %}<span class="chip chip-accent">Text + images</span>{% else if !t.inputs.is_empty() %}{{ t.inputs }}{% endif %}</td>
+      <td><span class="fit fit-{{ t.fit_class }}" title="Rough estimate — never a guarantee">{{ t.fit_msg }}</span></td>
+      <td class="actions">
+        {% if t.installed %}
+        <a class="btn btn-sm" href="/chat?model=ollama:{{ t.name }}">Chat</a>
+        {% else %}
+        <form method="post" action="/discover/ollama/pull">
+          <input type="hidden" name="name" value="{{ t.name }}">
+          <input type="hidden" name="back" value="/discover/ollama/{{ name }}">
+          <button class="btn btn-sm btn-primary" type="submit" {% if !running %}disabled title="Start Ollama first"{% endif %}><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#download"></use></svg>Download</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="small muted">Models run through Ollama, which uses your GPU automatically when it can. Model licenses are set by their publishers.</p>
+</section>
+{% endblock %}

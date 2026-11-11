@@ -1,0 +1,26 @@
+# Build output
+/target/
+
+# Offline dependency bundles (used only to build in an air-gapped environment)
+/vendor/
+vendor.tgz
+vendor.tgz.part-*
+env-report.txt
+/.cargo/config.toml
+
+# Local data when running with --data-dir inside the repository
+/data/
+
+# Model files never belong in the repository
+/test-models/
+*.gguf
+*.safetensors
+*.bin
+*.onnx
+
+# Editors and operating systems
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db

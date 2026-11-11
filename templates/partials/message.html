@@ -1,0 +1,56 @@
+<article class="msg {% if m.is_user %}msg-user{% else %}msg-assistant{% endif %} status-{{ m.status }}" id="msg-{{ m.id }}">
+  <header class="msg-head">
+    <span class="msg-who">{{ m.who }}</span>
+    <time datetime="{{ m.time_full }}" title="{{ m.time_full }}">{{ m.time }}</time>
+    {% if m.status == "stopped" %}<span class="badge badge-warn">Stopped</span>{% endif %}
+    {% if m.status == "error" %}<span class="badge badge-danger">Failed</span>{% endif %}
+  </header>
+  {% if !m.attachments.is_empty() %}
+  <div class="attachments">
+    {% for a in m.attachments %}
+    {% if a.kind == "image" %}
+    <a class="att att-image" href="{{ a.url }}" target="_blank" rel="noopener"><img src="{{ a.url }}" alt="{{ a.name }}" loading="lazy"></a>
+    {% else if a.kind == "audio" %}
+    <figure class="att att-audio"><audio controls preload="none" src="{{ a.url }}"></audio><figcaption>{{ a.name }} · {{ a.size }}</figcaption>
+      {% if !a.transcript.is_empty() %}<details class="disclosure small"><summary>Transcript</summary><p class="pre-wrap">{{ a.transcript }}</p></details>{% endif %}
+    </figure>
+    {% else %}
+    <figure class="att att-video"><video controls preload="metadata" src="{{ a.url }}"></video><figcaption>{{ a.name }} · {{ a.size }}{% if !a.frames.is_empty() %} · {{ a.frames.len() }} frames shown to the model{% endif %}</figcaption></figure>
+    {% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if !m.raw.is_empty() %}
+  <div class="msg-body {% if m.is_user %}user-text{% else %}md{% endif %}">{{ m.html|safe }}</div>
+  {% endif %}
+  {% if !m.error.is_empty() %}<p class="msg-error"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#alert"></use></svg>{{ m.error }}</p>{% endif %}
+  <footer class="msg-foot">
+    {% if !m.stats.is_empty() %}<span class="msg-stats">{{ m.stats }}</span>{% endif %}
+    <div class="msg-actions">
+      {% if !m.raw.is_empty() %}
+      <button type="button" class="btn btn-ghost btn-xs" popovertarget="copy-{{ m.id }}" title="Copy text"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#copy"></use></svg>Copy</button>
+      <a class="btn btn-ghost btn-xs" href="/chat/{{ conv_id }}/messages/{{ m.id }}/raw" title="Download as a Markdown file"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#download"></use></svg>Save</a>
+      {% endif %}
+      {% if m.can_edit %}<button type="button" class="btn btn-ghost btn-xs" popovertarget="edit-{{ m.id }}"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#edit"></use></svg>Edit</button>{% endif %}
+      {% if m.can_continue %}<form method="post" action="/chat/{{ conv_id }}/continue"><button class="btn btn-ghost btn-xs" type="submit" title="Ask the model to keep writing"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#play"></use></svg>Continue</button></form>{% endif %}
+      {% if m.can_regenerate %}<form method="post" action="/chat/{{ conv_id }}/regenerate"><button class="btn btn-ghost btn-xs" type="submit" title="Write a new answer"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#refresh"></use></svg>Regenerate</button></form>{% endif %}
+    </div>
+  </footer>
+  {% if !m.raw.is_empty() %}
+  <div id="copy-{{ m.id }}" popover class="popover copy-pop">
+    <div class="popover-head"><h3>Copy this message</h3><button type="button" class="btn btn-ghost btn-icon" popovertarget="copy-{{ m.id }}" popovertargetaction="hide" title="Close"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#x"></use></svg><span class="sr-only">Close</span></button></div>
+    <p class="small muted">Click in the box, press <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>A</kbd> to select everything, then <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>C</kbd>.</p>
+    <textarea class="input copy-box" readonly rows="10" aria-label="Message text">{{ m.raw }}</textarea>
+  </div>
+  {% endif %}
+  {% if m.can_edit %}
+  <div id="edit-{{ m.id }}" popover class="popover">
+    <div class="popover-head"><h3>Edit your message</h3><button type="button" class="btn btn-ghost btn-icon" popovertarget="edit-{{ m.id }}" popovertargetaction="hide" title="Close"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#x"></use></svg><span class="sr-only">Close</span></button></div>
+    <form method="post" action="/chat/{{ conv_id }}/messages/{{ m.id }}/edit" class="stack">
+      <textarea class="input" name="text" rows="8" required aria-label="Message">{{ m.raw }}</textarea>
+      <p class="small muted">Saving removes everything after this message and asks the model again.</p>
+      <div class="cluster"><button class="btn btn-primary" type="submit">Save and ask again</button><button type="button" class="btn" popovertarget="edit-{{ m.id }}" popovertargetaction="hide">Cancel</button></div>
+    </form>
+  </div>
+  {% endif %}
+</article>

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en" data-theme="{{ theme }}" class="{% if dark %}is-dark{% else %}is-light{% endif %}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+{% if running %}<meta http-equiv="refresh" content="1">{% endif %}
+<title>Progress · Local AI Studio</title>
+<link rel="stylesheet" href="/assets/app.css?v={{ css_rev }}">
+<link rel="stylesheet" href="/assets/themes.css?v={{ css_rev }}">
+</head>
+<body class="frame">
+{% if running %}
+<div class="frame-card" role="status">
+  <div class="frame-row">
+    <span class="spinner" aria-hidden="true"></span>
+    <b class="grow truncate">{{ label }}</b>
+    <span class="small muted">{{ percent }}%</span>
+  </div>
+  <progress class="bar" max="100" value="{{ percent }}">{{ percent }}%</progress>
+  <div class="frame-row small muted">
+    <span class="grow truncate">“{{ g.prompt }}”{% if !detail.is_empty() %} · {{ detail }}{% endif %}</span>
+    <form method="post" action="/create/{{ g.id }}/cancel" target="_top"><button class="btn btn-sm" type="submit"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#stop"></use></svg>Cancel</button></form>
+  </div>
+</div>
+{% else %}
+<div class="frame-card">
+  <div class="frame-row">
+    {% if g.status == "Done" %}<svg class="icon ok" aria-hidden="true"><use href="/assets/icons.svg#check"></use></svg><b class="grow">Finished</b>
+    {% else if g.status == "Cancelled" %}<svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#info"></use></svg><b class="grow">Cancelled</b>
+    {% else %}<svg class="icon danger" aria-hidden="true"><use href="/assets/icons.svg#alert"></use></svg><b class="grow">It didn't work</b>{% endif %}
+    <a class="btn btn-sm" href="/create#gen-{{ g.id }}" target="_top">Show in history</a>
+  </div>
+  {% if !g.error.is_empty() %}<p class="msg-error small">{{ g.error }}</p>{% endif %}
+  {% if !g.images.is_empty() %}
+  <div class="frame-images">
+    {% for i in g.images %}<a href="{{ i.url }}" target="_blank" rel="noopener" title="Open full size ({{ i.size }}, seed {{ i.seed }})"><img src="{{ i.url }}" alt="{{ g.prompt }}"></a>{% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+</body>
+</html>

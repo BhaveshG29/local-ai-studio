@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block content %}
+<nav class="crumbs" aria-label="Breadcrumb"><a href="/discover?tab=hf">Hugging Face</a><span aria-hidden="true">/</span><span>{{ author }}</span></nav>
+<header class="page-head">
+  <div>
+    <h1 class="break">{{ name }}</h1>
+    <p class="lead">by <b>{{ author }}</b>{% if !task.is_empty() %} · {{ task }}{% endif %}</p>
+    <div class="cluster tight">
+      {% for f in formats %}<span class="chip chip-outline">{{ f }}</span>{% endfor %}
+      {% if !params.is_empty() %}<span class="chip chip-outline">{{ params }} parameters</span>{% endif %}
+      {% if !license.is_empty() %}<span class="chip chip-outline" title="Model license — set by the model's publisher">License: {{ license }}</span>{% endif %}
+      {% if gated %}<span class="badge badge-warn"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#lock"></use></svg>Gated</span>{% endif %}
+    </div>
+  </div>
+  <div class="head-stats">
+    <span title="Downloads"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#download"></use></svg>{{ downloads }}</span>
+    <span title="Likes"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#heart"></use></svg>{{ likes }}</span>
+    {% if !updated.is_empty() %}<span>Updated {{ updated }}</span>{% endif %}
+    <a class="btn btn-ghost btn-sm" href="{{ hf_url }}" rel="noopener noreferrer" target="_blank"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#external"></use></svg>Open on huggingface.co</a>
+  </div>
+</header>
+
+{% if let Some(c) = cached_at %}
+<div class="notice notice-info"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#info"></use></svg><div>Hugging Face is unreachable — showing information saved {{ c }}. Downloads need a connection.</div></div>
+{% endif %}
+{% if !in_library.is_empty() %}
+<div class="notice notice-ok"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#check"></use></svg><div>Already in your library: {% for l in in_library %}<a href="{{ l.0 }}">{{ l.1 }}</a>{% if !loop.last %}, {% endif %}{% endfor %}</div></div>
+{% endif %}
+{% if gated && !has_token %}
+<div class="notice notice-warn"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#lock"></use></svg><div><b>This model is gated.</b> Its publisher requires you to accept their terms first: open it on <a href="{{ hf_url }}" rel="noopener noreferrer" target="_blank">huggingface.co</a>, accept, then add an access token in <a href="/settings#huggingface">Settings → Hugging Face</a>.</div></div>
+{% endif %}
+
+<div class="split">
+  <section class="card compat" aria-labelledby="compat-title">
+    <div class="section-head">
+      <h2 id="compat-title">Can I run it?</h2>
+      <span class="badge badge-{{ support_class }}">{{ support }}</span>
+    </div>
+    <p>{{ summary }}</p>
+    <dl class="kv compact"><dt>What it does</dt><dd>{{ capability }}</dd><dt>Format</dt><dd>{{ format }}</dd><dt>Repository size</dt><dd>{{ total_size }}</dd></dl>
+    {% if !reasons.is_empty() %}<ul class="reasons">{% for r in reasons %}<li>{{ r }}</li>{% endfor %}</ul>{% endif %}
+    {% if !base_models.is_empty() %}<p class="small muted">Based on: {% for b in base_models %}<a href="/discover/hf/{{ b }}">{{ b }}</a>{% if !loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+  </section>
+
+  <section class="card" aria-labelledby="dl-title">
+    <h2 id="dl-title">Download</h2>
+    {% if variants.is_empty() %}
+    <p class="muted">There is nothing downloadable in this repository.</p>
+    {% else %}
+    <form method="post" action="/discover/hf/{{ id }}/download" class="stack">
+      <fieldset class="variants">
+        <legend class="sr-only">Choose a version</legend>
+        {% for v in variants %}
+        <label class="variant{% if !v.builtin %} is-dim{% endif %}">
+          <input type="radio" name="variant" value="{{ v.id }}" {% if v.checked %}checked{% endif %}>
+          <span class="variant-main">
+            <span class="variant-title">{{ v.label }}{% if v.recommended %} <span class="badge badge-accent">Recommended</span>{% endif %}{% if v.downloaded %} <span class="badge badge-ok">Downloaded</span>{% endif %}</span>
+            <span class="variant-meta">
+              <span class="fit fit-{{ v.fit_class }}" title="Rough estimate — never a guarantee">{{ v.fit_msg }}</span>
+              {% if !v.note.is_empty() %}<span class="muted">{{ v.note }}</span>{% endif %}
+            </span>
+          </span>
+        </label>
+        {% endfor %}
+      </fieldset>
+      <div class="cluster">
+        <button class="btn btn-primary btn-lg" type="submit"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#download"></use></svg>Download selected</button>
+        <span class="muted small">Downloads continue in the background and can be paused.</span>
+      </div>
+    </form>
+    {% if ollama_running %}
+    <details class="disclosure">
+      <summary>Get it with Ollama instead</summary>
+      <p class="small muted">Ollama can pull GGUF files straight from Hugging Face, including ones the built-in engine can't run.</p>
+      <div class="stack-sm">
+      {% for v in variants %}{% if !v.ollama_ref.is_empty() %}
+      <form method="post" action="/discover/ollama/pull" class="row-form">
+        <input type="hidden" name="name" value="{{ v.ollama_ref }}">
+        <input type="hidden" name="back" value="/discover/hf/{{ id }}">
+        <code class="grow truncate">{{ v.ollama_ref }}</code>
+        <button class="btn btn-sm" type="submit">Pull with Ollama</button>
+      </form>
+      {% endif %}{% endfor %}
+      </div>
+    </details>
+    {% endif %}
+    {% endif %}
+  </section>
+</div>
+
+<details class="card disclosure" id="files">
+  <summary><h2>Files ({{ files.len() }})</h2></summary>
+  <div class="table-wrap">
+  <table class="table compact">
+    <thead><tr><th>File</th><th class="num">Size</th><th>Storage</th></tr></thead>
+    <tbody>{% for f in files %}<tr><td class="break mono small">{{ f.path }}</td><td class="num">{{ f.size }}</td><td>{% if f.lfs %}<span class="chip chip-outline">large file</span>{% endif %}</td></tr>{% endfor %}</tbody>
+  </table>
+  </div>
+</details>
+
+{% if let Some(html) = readme_html %}
+<details class="card disclosure" open>
+  <summary><h2>Model card</h2></summary>
+  <div class="md readme">{{ html|safe }}</div>
+  <p class="small muted">Written by the model's publisher. Model weights and their licenses belong to their publishers.</p>
+</details>
+{% endif %}
+{% endblock %}

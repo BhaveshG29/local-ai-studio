@@ -1,0 +1,95 @@
+[package]
+name = "local-ai-studio"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+authors = ["Bhavesh G", "Claude (Anthropic)"]
+license = "Apache-2.0"
+description = "Discover, download, manage and run AI models locally — Hugging Face + Ollama, native Rust inference with Candle."
+readme = "README.md"
+keywords = ["llm", "local-ai", "candle", "ollama", "huggingface"]
+categories = ["command-line-utilities", "web-programming::http-server"]
+default-run = "local-ai-studio"
+exclude = ["/.github", "/test-models", "/vendor"]
+
+[[bin]]
+name = "local-ai-studio"
+path = "src/main.rs"
+
+# Regenerates THIRD_PARTY_LICENSES.md (a maintenance tool, not part of the app).
+[[bin]]
+name = "third-party-licenses"
+path = "tools/third_party_licenses.rs"
+test = false
+doc = false
+
+[features]
+default = []
+# GPU acceleration for the built-in Candle engine. These need the vendor toolkits
+# at build time: the CUDA toolkit (nvcc) for `cuda`, Xcode command line tools for `metal`.
+cuda = ["candle-core/cuda", "candle-nn/cuda", "candle-transformers/cuda"]
+cudnn = ["cuda", "candle-core/cudnn", "candle-nn/cudnn", "candle-transformers/cudnn"]
+metal = ["candle-core/metal", "candle-nn/metal", "candle-transformers/metal"]
+accelerate = ["candle-core/accelerate", "candle-nn/accelerate", "candle-transformers/accelerate"]
+
+[dependencies]
+anyhow = "1"
+thiserror = "2"
+axum = { version = "0.8", features = ["multipart"] }
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["io"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+futures-util = "0.3"
+tower-http = { version = "0.6", features = ["trace", "catch-panic"] }
+http = "1"
+askama = "0.16"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots", "stream", "json", "http2", "charset", "gzip", "system-proxy"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
+candle-core = "0.11"
+rayon = "1.12"
+candle-nn = "0.11"
+candle-transformers = "0.11"
+tokenizers = { version = "0.23", default-features = false, features = ["fancy-regex"] }
+minijinja = { version = "3", features = ["loop_controls", "json"] }
+minijinja-contrib = { version = "3", features = ["pycompat"] }
+pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
+syntect = { version = "5", default-features = false, features = ["default-fancy"] }
+sysinfo = { version = "0.38", default-features = false, features = ["system", "disk"] }
+keyring = { version = "3", features = ["apple-native", "windows-native", "async-secret-service", "crypto-rust", "tokio"] }
+symphonia = { version = "0.5", features = ["mp3", "aac", "isomp4", "flac", "wav", "pcm", "ogg", "vorbis", "mkv", "alac"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif", "bmp"] }
+scraper = "0.29"
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "ansi"] }
+tracing-appender = "0.2"
+sha2 = "0.10"
+sha1 = "0.10"
+hex = "0.4"
+base64 = "0.22"
+webbrowser = "1"
+clap = { version = "4", features = ["derive", "env"] }
+directories = "6"
+toml = "0.8"
+url = "2"
+percent-encoding = "2"
+subtle = "2"
+regex = "1"
+
+[dev-dependencies]
+tempfile = "3"
+http-body-util = "0.1"
+tower = { version = "0.5", features = ["util"] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 16
+strip = "debuginfo"
+
+# Inference code is unusably slow without optimisations; keep debug builds usable.
+[profile.dev.package."*"]
+opt-level = 3

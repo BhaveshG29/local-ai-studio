@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Create images</h1>
+    <p class="lead">Describe a picture and Stable Diffusion paints it on this computer. Nothing is uploaded anywhere.</p>
+  </div>
+  {% if has_models %}
+  <form method="post" action="/settings/data/open-outputs"><button class="btn btn-ghost" type="submit"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#folder"></use></svg>Open pictures folder</button></form>
+  {% endif %}
+</header>
+
+{% if !has_models %}
+<div class="empty card">
+  <svg class="icon icon-xl" aria-hidden="true"><use href="/assets/icons.svg#image"></use></svg>
+  <h2>No image model yet</h2>
+  <p>Making pictures needs a Stable Diffusion model (2.5 to 7 GB). <b>SD-Turbo</b> is the easiest start: it paints a picture in 1 to 4 steps.</p>
+  <div class="cluster center"><a class="btn btn-primary" href="/discover/hf/stabilityai/sd-turbo">Get SD-Turbo</a><a class="btn" href="/discover?tab=hf&amp;task=text-to-image">Browse image models</a></div>
+  <p class="small muted">Want to ask questions <em>about</em> a picture instead? Use <a href="/chat">Chat</a> with a model marked “sees images”.</p>
+</div>
+{% else %}
+<div class="create-layout">
+  <section class="card create-form" aria-labelledby="create-form-title">
+    <h2 id="create-form-title" class="sr-only">New picture</h2>
+    {% if models.len() > 1 %}
+    <form method="get" action="/create" class="model-switch">
+      <label class="field"><span>Model</span>
+        <span class="input-row">
+          <select class="select" name="model">{% for m in models %}<option value="{{ m.id }}" {% if m.selected %}selected{% endif %}>{{ m.label }}</option>{% endfor %}</select>
+          <button class="btn" type="submit" title="Switch model and use its recommended sizes">Switch</button>
+        </span>
+      </label>
+    </form>
+    {% endif %}
+    <form method="post" action="/create" class="stack">
+      {% for m in models %}{% if m.selected %}<input type="hidden" name="model_id" value="{{ m.id }}">{% if models.len() == 1 %}<p class="small muted">Model: <b>{{ m.label }}</b></p>{% endif %}{% endif %}{% endfor %}
+      <label class="field"><span>Describe the picture</span>
+        <textarea class="input" name="prompt" rows="4" maxlength="2000" required autofocus placeholder="A cozy wooden cabin in a snowy forest at dusk, warm light in the windows, watercolor">{{ prompt }}</textarea>
+      </label>
+      <label class="field"><span>Leave out <small class="muted">(optional)</small></span>
+        <input class="input" name="negative" maxlength="2000" value="{{ negative }}" placeholder="blurry, text, watermark">
+      </label>
+      {% if turbo %}<p class="small muted hint">{{ version_label }} ignores “Leave out”, because it works without guidance.</p>{% endif %}
+      <div class="param-grid">
+        <label class="field"><span>Shape and size</span>
+          <select class="select" name="size">{% for s in sizes %}<option value="{{ s.value }}" {% if s.selected %}selected{% endif %}>{{ s.label }}</option>{% endfor %}</select>
+        </label>
+        <label class="field"><span>How many pictures</span><input class="input" type="number" name="count" min="1" max="4" value="{{ count }}"></label>
+      </div>
+      <details class="disclosure">
+        <summary>Advanced settings</summary>
+        <div class="param-grid">
+          <label class="field" data-tip="More steps add detail but take longer."><span>Steps</span><input class="input" type="number" name="steps" min="1" max="100" value="{{ steps }}"></label>
+          <label class="field" data-tip="How strictly to follow the description. 0 turns guidance off."><span>Guidance</span><input class="input" type="number" name="guidance" min="0" max="20" step="0.5" value="{{ guidance }}"></label>
+          <label class="field" data-tip="The same seed and settings paint the same picture again."><span>Seed</span><input class="input" type="text" inputmode="numeric" name="seed" value="{{ seed }}" placeholder="random"></label>
+        </div>
+        <p class="small muted">{{ version_label }} works best with {% if turbo %}1–4 steps and guidance 0{% else %}20–30 steps and guidance around 7{% endif %}. When you make several pictures, each one uses the next seed.</p>
+      </details>
+      <div class="cluster between">
+        <button class="btn btn-primary btn-lg" type="submit"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#sparkles"></use></svg>Create</button>
+        <span class="small muted">Runs on {{ engine_label }}</span>
+      </div>
+    </form>
+  </section>
+
+  <section class="create-results" aria-labelledby="history-title">
+    {% if let Some(r) = running %}
+    <iframe class="progress-frame" src="/create/{{ r.id }}/progress" title="Progress of the picture being created"></iframe>
+    {% endif %}
+    <h2 id="history-title">Your pictures</h2>
+    {% if history.is_empty() %}
+    <p class="muted">Pictures you create appear here. They're saved in <span class="mono break">{{ outputs_dir }}</span>.</p>
+    {% endif %}
+    {% for g in history %}
+    <article class="card gen" id="gen-{{ g.id }}">
+      <header class="gen-head">
+        <p class="gen-prompt">{{ g.prompt }}</p>
+        <span class="badge badge-{{ g.status_class }}">{{ g.status }}</span>
+      </header>
+      {% if !g.images.is_empty() %}
+      <div class="gen-images">
+        {% for i in g.images %}
+        <figure class="gen-image">
+          <a href="{{ i.url }}" target="_blank" rel="noopener" title="Open full size"><img src="{{ i.url }}" alt="{{ g.prompt }}" loading="lazy"></a>
+          <figcaption class="small"><span class="muted">{{ i.size }} · seed {{ i.seed }}</span><a class="btn btn-ghost btn-xs" href="{{ i.download }}"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#download"></use></svg>Download</a></figcaption>
+        </figure>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if !g.error.is_empty() %}<p class="msg-error"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#alert"></use></svg>{{ g.error }}</p>{% endif %}
+      {% if !g.negative.is_empty() %}<p class="small muted">Leave out: {{ g.negative }}</p>{% endif %}
+      <p class="small muted">{{ g.model }} · {{ g.details }} · {{ g.created }}</p>
+      <div class="cluster tight">
+        {% if g.status == "Generating" %}
+        <form method="post" action="/create/{{ g.id }}/cancel"><button class="btn btn-sm" type="submit"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#stop"></use></svg>Cancel</button></form>
+        {% else %}
+        <a class="btn btn-sm" href="{{ g.reuse_href }}" title="Fill the form with these settings"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#refresh"></use></svg>Use again</a>
+        {% if !g.images.is_empty() %}<button type="button" class="btn btn-sm btn-ghost" popovertarget="save-{{ g.id }}"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#folder"></use></svg>Save to folder…</button>{% endif %}
+        <button type="button" class="btn btn-sm btn-ghost danger" popovertarget="del-{{ g.id }}"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#trash"></use></svg>Delete…</button>
+        {% endif %}
+      </div>
+      {% if !g.images.is_empty() %}
+      <div id="save-{{ g.id }}" popover class="popover">
+        <div class="popover-head"><h3>Save copies to a folder</h3><button type="button" class="btn btn-ghost btn-icon" popovertarget="save-{{ g.id }}" popovertargetaction="hide" title="Close"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#x"></use></svg><span class="sr-only">Close</span></button></div>
+        <form method="post" action="/create/{{ g.id }}/save" class="stack">
+          <label class="field"><span>Folder on this computer</span><input class="input mono" name="folder" value="{{ pictures_dir }}" required placeholder="/home/you/Pictures"></label>
+          <p class="small muted">The folder is created if it doesn't exist. The originals stay in your history.</p>
+          <button class="btn btn-primary" type="submit">Save {% if g.images.len() == 1 %}the picture{% else %}{{ g.images.len() }} pictures{% endif %}</button>
+        </form>
+      </div>
+      {% endif %}
+      <div id="del-{{ g.id }}" popover class="popover confirm">
+        <h3>Delete these pictures?</h3>
+        <p>The pictures are removed from your history and from the pictures folder. Copies you saved elsewhere are kept.</p>
+        <div class="cluster"><form method="post" action="/create/{{ g.id }}/delete"><button class="btn btn-danger" type="submit">Delete</button></form><button type="button" class="btn" popovertarget="del-{{ g.id }}" popovertargetaction="hide">Keep them</button></div>
+      </div>
+    </article>
+    {% endfor %}
+  </section>
+</div>
+{% endif %}
+{% endblock %}

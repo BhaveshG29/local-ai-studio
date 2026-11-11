@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Library</h1>
+    <p class="lead">{{ total_count }} {% if total_count == 1 %}model{% else %}models{% endif %} · {{ total_size }} on disk</p>
+  </div>
+  <div class="cluster">
+    <a class="btn btn-primary" href="/discover"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#plus"></use></svg>Get more models</a>
+    <button type="button" class="btn" popovertarget="import-pop"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#folder"></use></svg>Add a GGUF file</button>
+  </div>
+</header>
+
+<div id="import-pop" popover class="popover">
+  <div class="popover-head"><h2>Add a GGUF file from this computer</h2><button type="button" class="btn btn-ghost btn-icon" popovertarget="import-pop" popovertargetaction="hide" title="Close"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#x"></use></svg><span class="sr-only">Close</span></button></div>
+  <form method="post" action="/library/import" class="stack">
+    <label class="field"><span>Full path to the .gguf file</span><input class="input mono" type="text" name="path" required placeholder="/home/you/models/model-Q4_K_M.gguf"></label>
+    <p class="small muted">The file is not copied or moved; Local AI Studio reads it where it is.</p>
+    <button class="btn btn-primary" type="submit">Add to library</button>
+  </form>
+</div>
+
+{% if let Some(e) = ollama_error %}
+<div class="notice notice-info"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#info"></use></svg><div>Ollama models aren't listed because Ollama isn't reachable ({{ e }}).</div></div>
+{% endif %}
+
+<div class="toolbar">
+  <nav class="tabs tabs-pills" aria-label="Filter">
+    {% for t in tabs %}<a href="/library?kind={{ t.value }}" {% if t.active %}class="active" aria-current="page"{% endif %}>{{ t.label }} <span class="count">{{ t.count }}</span></a>{% endfor %}
+  </nav>
+  <form method="get" action="/library" class="search-inline" role="search">
+    <input type="hidden" name="kind" value="{{ kind }}">
+    <input class="input" type="search" name="q" value="{{ q }}" placeholder="Filter by name" aria-label="Filter by name">
+    <button class="btn" type="submit" title="Filter"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#search"></use></svg><span class="sr-only">Filter</span></button>
+  </form>
+</div>
+
+{% if rows.is_empty() %}
+<div class="empty card">
+  <svg class="icon icon-xl" aria-hidden="true"><use href="/assets/icons.svg#library"></use></svg>
+  <p>{% if total_count == 0 %}Your library is empty. Download a model from Discover to get started.{% else %}No models match this filter.{% endif %}</p>
+  <a class="btn btn-primary" href="/discover">Discover models</a>
+</div>
+{% else %}
+<div class="lib-list">
+  {% for r in rows %}
+  <article class="card lib-item{% if !r.runnable %} is-problem{% endif %}">
+    <div class="lib-main">
+      <div class="lib-title">
+        <a class="lib-name break" href="{{ r.href }}">{{ r.name }}</a>
+        <span class="badge {{ r.cap_class }}">{{ r.capability }}</span>
+        {% if r.loaded %}<span class="badge badge-ok" title="Loaded in memory">In memory</span>{% endif %}
+        {% if !r.runnable %}<span class="badge badge-danger">Can't run</span>{% endif %}
+        {% if !r.duplicate_of.is_empty() %}<span class="badge badge-muted" title="Same files as another model; no extra disk space used">Same as {{ r.duplicate_of }}</span>{% endif %}
+      </div>
+      {% if r.original != r.name %}<div class="muted small break">{{ r.original }}</div>{% endif %}
+      <div class="lib-facts small">
+        <span><b>{{ r.source }}</b></span>
+        {% if !r.format.is_empty() %}<span>{{ r.format }}</span>{% endif %}
+        {% if !r.arch.is_empty() %}<span>{{ r.arch }}</span>{% endif %}
+        {% if !r.params.is_empty() %}<span>{{ r.params }}</span>{% endif %}
+        {% if !r.quant.is_empty() %}<span>{{ r.quant }}</span>{% endif %}
+        <span>{{ r.size }}</span>
+        <span>used {{ r.last_used }}</span>
+      </div>
+      {% if !r.problem.is_empty() %}<p class="small problem"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#alert"></use></svg>{{ r.problem }}</p>{% endif %}
+      <div class="muted small truncate mono" title="{{ r.location }}">{{ r.location }}</div>
+    </div>
+    <div class="lib-actions">
+      {% if !r.use_href.is_empty() %}<a class="btn btn-primary btn-sm" href="{{ r.use_href }}">{{ r.use_label }}</a>{% endif %}
+      {% if r.can_load %}
+      <form method="post" action="/library/action"><input type="hidden" name="model_ref" value="{{ r.model_ref }}">{% if r.loaded %}<input type="hidden" name="action" value="unload"><button class="btn btn-sm" type="submit">Unload</button>{% else %}<input type="hidden" name="action" value="load"><button class="btn btn-sm" type="submit" title="Load into memory now so the first answer is faster">Load</button>{% endif %}</form>
+      {% endif %}
+      <details class="menu">
+        <summary class="btn btn-sm btn-ghost" title="More actions">More<svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#chevron-down"></use></svg></summary>
+        <div class="menu-body">
+          <a href="{{ r.href }}">Details</a>
+          <button type="button" popovertarget="rename-{{ loop.index }}">Rename</button>
+          {% if r.can_open %}<form method="post" action="/library/action"><input type="hidden" name="model_ref" value="{{ r.model_ref }}"><input type="hidden" name="action" value="open"><button type="submit">Open folder</button></form>{% endif %}
+          <form method="post" action="/library/action"><input type="hidden" name="model_ref" value="{{ r.model_ref }}"><input type="hidden" name="action" value="update"><button type="submit">{% if r.is_ollama %}Update{% else %}Check for updates{% endif %}</button></form>
+          <button type="button" class="danger" popovertarget="delete-{{ loop.index }}">Delete…</button>
+        </div>
+      </details>
+    </div>
+    <div id="rename-{{ loop.index }}" popover class="popover">
+      <h3>Rename</h3>
+      <form method="post" action="/library/action" class="stack">
+        <input type="hidden" name="model_ref" value="{{ r.model_ref }}"><input type="hidden" name="action" value="rename">
+        <label class="field"><span>Name shown in Local AI Studio</span><input class="input" name="name" value="{{ r.name }}" maxlength="120" required></label>
+        <div class="cluster"><button class="btn btn-primary" type="submit">Save</button><button type="button" class="btn" popovertarget="rename-{{ loop.index }}" popovertargetaction="hide">Cancel</button></div>
+      </form>
+    </div>
+    <div id="delete-{{ loop.index }}" popover class="popover confirm">
+      <h3>Delete “{{ r.name }}”?</h3>
+      <p>{{ r.delete_note }}</p>
+      <form method="post" action="/library/action" class="stack">
+        <input type="hidden" name="model_ref" value="{{ r.model_ref }}"><input type="hidden" name="action" value="delete">
+        {% if r.source == "Imported" %}<label class="check"><input type="checkbox" name="delete_files"> Also delete the file from disk</label>{% endif %}
+        <div class="cluster"><button class="btn btn-danger" type="submit">Delete</button><button type="button" class="btn" popovertarget="delete-{{ loop.index }}" popovertargetaction="hide">Keep it</button></div>
+      </form>
+    </div>
+  </article>
+  {% endfor %}
+</div>
+{% endif %}
+<p class="small muted">Models are stored in <span class="mono">{{ models_dir }}</span>. Ollama keeps its own models; Local AI Studio lists them here so you can manage everything in one place.</p>
+{% endblock %}

@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block content %}
+<nav class="crumbs" aria-label="Breadcrumb"><a href="/transcribe">Speech to text</a><span aria-hidden="true">/</span><span class="truncate">{{ t.file_name }}</span></nav>
+<header class="page-head">
+  <div>
+    <h1 class="break">{{ t.file_name }}</h1>
+    <div class="cluster tight small">
+      <span class="badge badge-{{ t.status_class }}">{{ t.status }}</span>
+      <span class="muted">{{ t.task }} · {{ t.language }} · {{ t.model }} · {{ t.created }}{% if !t.duration.is_empty() %} · took {{ t.duration }}{% endif %}</span>
+    </div>
+  </div>
+  <div class="cluster">
+    {% if running %}
+    <form method="post" action="/transcribe/{{ t.id }}/cancel"><button class="btn" type="submit"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#stop"></use></svg>Cancel</button></form>
+    {% else %}
+    {% if !text.is_empty() %}
+    <form method="post" action="/transcribe/{{ t.id }}/to-chat"><button class="btn btn-primary" type="submit" title="Start a chat that summarises this transcript"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#chat"></use></svg>Ask a chat model about it</button></form>
+    {% endif %}
+    <button type="button" class="btn btn-ghost danger" popovertarget="del-tx"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#trash"></use></svg>Delete…</button>
+    {% endif %}
+  </div>
+</header>
+
+{% if running %}
+<div class="card running-card" role="status">
+  <div class="frame-row"><span class="spinner" aria-hidden="true"></span><b class="grow">Listening and writing… {{ percent }}%</b></div>
+  <progress class="bar" max="100" value="{{ percent }}">{{ percent }}%</progress>
+  <p class="small muted">This page updates by itself every few seconds. Loading the model the first time can take a moment.</p>
+</div>
+{% endif %}
+
+{% if !t.error.is_empty() %}
+<div class="notice notice-error"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#alert"></use></svg><div>{{ t.error }}</div></div>
+{% endif %}
+
+{% if !audio_url.is_empty() %}
+<audio class="player" controls preload="metadata" src="{{ audio_url }}"></audio>
+{% endif %}
+
+{% if !text.is_empty() %}
+<div class="split split-wide">
+  <section class="card">
+    <div class="card-head"><h2>Text</h2>
+      <div class="cluster tight">
+        <a class="btn btn-sm" href="/transcribe/{{ t.id }}/export?format=txt"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#download"></use></svg>Text file</a>
+        <a class="btn btn-sm" href="/transcribe/{{ t.id }}/export?format=srt" title="Subtitles with timings, for video players"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#download"></use></svg>Subtitles (.srt)</a>
+      </div>
+    </div>
+    <label class="sr-only" for="tx-text">Transcript text</label>
+    <textarea id="tx-text" class="input copy-box" readonly rows="16">{{ text }}</textarea>
+    <p class="small muted">To copy: click in the box, press <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>A</kbd>, then <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>C</kbd>.</p>
+  </section>
+  {% if !segments.is_empty() %}
+  <section class="card">
+    <h2>With timings</h2>
+    <ol class="segments">
+      {% for s in segments %}<li><span class="seg-time mono small">{{ s.start }} – {{ s.end }}</span><span class="seg-text">{{ s.text }}</span></li>{% endfor %}
+    </ol>
+  </section>
+  {% endif %}
+</div>
+{% else if !running && t.error.is_empty() %}
+<div class="empty card"><p>No speech was found in this recording.</p></div>
+{% endif %}
+
+<div id="del-tx" popover class="popover confirm">
+  <h3>Delete this transcript?</h3>
+  <p>The text and the uploaded recording are deleted. Files you downloaded are kept.</p>
+  <div class="cluster"><form method="post" action="/transcribe/{{ t.id }}/delete"><button class="btn btn-danger" type="submit">Delete</button></form><button type="button" class="btn" popovertarget="del-tx" popovertargetaction="hide">Keep it</button></div>
+</div>
+{% endblock %}
