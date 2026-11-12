@@ -298,6 +298,8 @@ pub struct GenerationDefaults {
     #[serde(serialize_with = "tidy_f32")]
     pub top_p: f32,
     pub top_k: u32,
+    /// Longest answer in tokens; 0 = no limit (the model stops by itself, or when the context
+    /// window is full).
     pub max_tokens: u32,
     #[serde(serialize_with = "tidy_f32")]
     pub repeat_penalty: f32,
@@ -312,7 +314,7 @@ impl Default for GenerationDefaults {
             temperature: 0.7,
             top_p: 0.9,
             top_k: 40,
-            max_tokens: 1024,
+            max_tokens: 0,
             repeat_penalty: 1.1,
             context_length: 4096,
             seed: None,
@@ -351,10 +353,18 @@ impl Default for MediaSettings {
     }
 }
 
+/// Version of the settings defaults; files from older versions are upgraded when loaded
+/// (see `Settings::upgrade`).
+pub const CONFIG_VERSION: u32 = 1;
+
 /// Everything in `config.toml`.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
+    /// The defaults this file was written with. Files from before versioning have none, so
+    /// a missing value means 0, not the current version.
+    #[serde(default)]
+    pub config_version: u32,
     pub server: ServerSettings,
     pub ui: UiSettings,
     pub storage: StorageSettings,
@@ -364,6 +374,23 @@ pub struct Settings {
     pub generation: GenerationDefaults,
     pub logging: LoggingSettings,
     pub media: MediaSettings,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            config_version: CONFIG_VERSION,
+            server: ServerSettings::default(),
+            ui: UiSettings::default(),
+            storage: StorageSettings::default(),
+            ollama: OllamaSettings::default(),
+            huggingface: HuggingFaceSettings::default(),
+            inference: InferenceSettings::default(),
+            generation: GenerationDefaults::default(),
+            logging: LoggingSettings::default(),
+            media: MediaSettings::default(),
+        }
+    }
 }
 
 pub const LOG_LEVELS: [&str; 5] = ["error", "warn", "info", "debug", "trace"];
@@ -376,6 +403,7 @@ impl Settings {
             Ok(text) => {
                 let mut s: Settings = toml::from_str(&text)
                     .with_context(|| format!("{} is not valid; fix or delete it", path.display()))?;
+                s.upgrade();
                 s.normalize();
                 Ok(s)
             }
@@ -394,13 +422,27 @@ impl Settings {
         Ok(())
     }
 
+    /// Brings a file written by an older version up to the current defaults. Saving the
+    /// settings later records the new version.
+    fn upgrade(&mut self) {
+        if self.config_version < 1 {
+            // Answers used to stop after 1,024 tokens by default. The default is now no limit;
+            // files that kept the old default follow it.
+            if self.generation.max_tokens == 1024 {
+                self.generation.max_tokens = 0;
+            }
+        }
+        self.config_version = CONFIG_VERSION;
+    }
+
     /// Clamps values into supported ranges so a hand-edited file cannot break the app.
     pub fn normalize(&mut self) {
         let g = &mut self.generation;
         g.temperature = crate::util::clamp_f32(g.temperature, 0.0, 2.0);
         g.top_p = crate::util::clamp_f32(g.top_p, 0.0, 1.0);
         g.top_k = g.top_k.min(1000);
-        g.max_tokens = g.max_tokens.clamp(1, 32_768);
+        // 0 = no limit; an answer can never be longer than the largest context anyway.
+        g.max_tokens = g.max_tokens.min(262_144);
         g.repeat_penalty = crate::util::clamp_f32(g.repeat_penalty, 0.5, 2.0);
         g.context_length = g.context_length.clamp(256, 262_144);
         self.storage.max_concurrent_downloads = self.storage.max_concurrent_downloads.clamp(1, 6);
@@ -515,8 +557,26 @@ mod tests {
         s.normalize();
         assert_eq!(s.generation.temperature, 2.0);
         assert_eq!(s.generation.top_p, 0.0);
-        assert_eq!(s.generation.max_tokens, 1);
+        assert_eq!(s.generation.max_tokens, 0, "0 means no limit");
         assert_eq!(s.logging.level, "info");
+    }
+
+    #[test]
+    fn old_files_get_the_new_answer_length_default() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(&path, "[generation]\nmax_tokens = 1024\n").unwrap();
+        let s = Settings::load(&path).unwrap();
+        assert_eq!(s.generation.max_tokens, 0);
+        assert_eq!(s.config_version, CONFIG_VERSION);
+        // A limit chosen after the upgrade is kept.
+        std::fs::write(&path, "config_version = 1\n[generation]\nmax_tokens = 1024\n").unwrap();
+        assert_eq!(Settings::load(&path).unwrap().generation.max_tokens, 1024);
+        // New installs start without a limit, and their file records the version.
+        let fresh = Settings::default();
+        assert_eq!((fresh.generation.max_tokens, fresh.config_version), (0, CONFIG_VERSION));
+        fresh.save(&path).unwrap();
+        assert!(std::fs::read_to_string(&path).unwrap().contains("config_version = 1"));
     }
 
     #[test]
@@ -557,11 +617,15 @@ mod tests {
         let defaults = toml::Value::try_from(Settings::default()).unwrap();
         let written: toml::Value = toml::from_str(text).unwrap();
         for (section, table) in written.as_table().unwrap() {
+            let Some(table) = table.as_table() else {
+                assert!(defaults.get(section).is_some(), "unknown key {section} in the example config");
+                continue;
+            };
             let known = defaults
                 .get(section)
                 .and_then(|v| v.as_table())
                 .unwrap_or_else(|| panic!("unknown section [{section}] in the example config"));
-            for key in table.as_table().unwrap().keys() {
+            for key in table.keys() {
                 assert!(known.contains_key(key), "unknown key {section}.{key} in the example config");
             }
         }

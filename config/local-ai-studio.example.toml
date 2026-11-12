@@ -9,6 +9,9 @@
 # defaults shown here. The Hugging Face token is never stored in this file — it lives in
 # your operating system's keychain (or the HF_TOKEN environment variable).
 
+# Which defaults this file was written with; the app updates older files when it loads them.
+config_version = 1
+
 [server]
 # Address to listen on. 127.0.0.1 means "this computer only" (recommended).
 host = "127.0.0.1"
@@ -68,7 +71,9 @@ max_loaded_models = 1
 temperature = 0.7
 top_p = 0.9
 top_k = 40
-max_tokens = 1024
+# Longest answer in tokens. 0 = no limit: the model writes until it is done, or until
+# context_length is used up.
+max_tokens = 0
 repeat_penalty = 1.1
 context_length = 4096
 # A fixed seed makes answers repeatable (default: random).

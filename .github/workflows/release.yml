@@ -44,17 +44,22 @@ jobs:
           if [ "${{ runner.os }}" = "Windows" ]; then bin="$bin.exe"; fi
           cp "$bin" README.md LICENSE NOTICE THIRD_PARTY_LICENSES.md "$name/"
           cp config/local-ai-studio.example.toml "$name/"
+          # Only the archive and its checksum are uploaded (from out/). Uploading the folder
+          # they were made from too made the release step fail with "is a directory".
+          mkdir out
           if [ "${{ matrix.archive }}" = "zip" ]; then
-            7z a "$name.zip" "$name" > /dev/null
-            sha256sum "$name.zip" > "$name.zip.sha256"
+            7z a "out/$name.zip" "$name" > /dev/null
+            (cd out && sha256sum "$name.zip" > "$name.zip.sha256")
           else
-            tar czf "$name.tar.gz" "$name"
-            shasum -a 256 "$name.tar.gz" > "$name.tar.gz.sha256"
+            tar czf "out/$name.tar.gz" "$name"
+            (cd out && shasum -a 256 "$name.tar.gz" > "$name.tar.gz.sha256")
           fi
+          ls -l out
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}
-          path: local-ai-studio-*
+          path: out/*
+          if-no-files-found: error
 
   publish:
     name: Publish release

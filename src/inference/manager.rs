@@ -396,7 +396,13 @@ pub struct CandleEngine {
 /// Renders messages with the model template, dropping the oldest turns to fit the context.
 pub fn build_prompt(llm: &LoadedLlm, req: &EngineRequest) -> Result<(Vec<u32>, Option<String>), String> {
     let ctx = llm.context_limit(&req.params);
-    let reserve = (req.params.max_tokens as usize).min(ctx / 2).max(64);
+    // Room kept for the answer when older messages must go. Without a limit, a quarter of
+    // the window (1,024 of 4,096 tokens, as the old default limit kept).
+    let reserve = match req.params.max_tokens as usize {
+        0 => ctx / 4,
+        n => n.min(ctx / 2),
+    }
+    .max(64);
     let mut messages: Vec<TemplateMessage> =
         req.messages.iter().map(|m| TemplateMessage::new(&m.role, &m.content)).collect();
     let mut note = None;

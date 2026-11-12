@@ -160,7 +160,9 @@ impl ChatEngine for OllamaEngine {
                 temperature: p.temperature,
                 top_p: p.top_p,
                 top_k: p.top_k,
-                num_predict: p.max_tokens as i64,
+                // No limit (0) becomes the context length: Ollama reads 0 as "write nothing",
+                // and -1 (infinite) can run on forever once it starts shifting the context.
+                num_predict: if p.max_tokens == 0 { i64::from(p.context_length) } else { i64::from(p.max_tokens) },
                 repeat_penalty: p.repeat_penalty,
                 num_ctx: p.context_length,
                 seed: p.seed,

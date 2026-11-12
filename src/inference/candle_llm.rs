@@ -443,10 +443,12 @@ impl LoadedLlm {
         let mut processor = LogitsProcessor::from_sampling(seed, sampling);
         let mut decoder = StreamDecoder::new();
         let mut history: Vec<u32> = prompt_ids.to_vec();
-        let max_new = (params.max_tokens as usize).min(ctx.saturating_sub(prompt_ids.len()));
+        // `max_tokens` 0 = no limit: the answer may use the rest of the context window.
+        let room = ctx.saturating_sub(prompt_ids.len());
+        let limit = (params.max_tokens > 0).then_some(params.max_tokens as usize);
+        let max_new = limit.map_or(room, |l| l.min(room));
         let mut generated = 0usize;
-        let mut stop =
-            if max_new < params.max_tokens as usize { StopReason::ContextFull } else { StopReason::MaxTokens };
+        let mut stop = if limit.is_some_and(|l| l <= room) { StopReason::MaxTokens } else { StopReason::ContextFull };
         while generated < max_new {
             let mut l = logits.flatten_all()?.to_dtype(DType::F32)?;
             if (params.repeat_penalty - 1.0).abs() > 1e-3 {

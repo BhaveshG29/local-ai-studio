@@ -193,6 +193,13 @@ async fn regenerate_edit_rename_settings_and_delete() {
     assert_eq!(sent["options"]["num_predict"], 64);
     assert!((sent["options"]["temperature"].as_f64().unwrap() - 0.2).abs() < 1e-6);
 
+    // An empty answer length means no limit: Ollama may write up to the whole context.
+    let r = app.post_form(&format!("/chat/{id}/settings"), &[("model_ref", MODEL), ("max_tokens", "")]).await;
+    assert_eq!(r.flash().unwrap().0, "ok", "{:?}", r.flash());
+    app.post_multipart(&format!("/chat/{id}/send"), &[("text", "Tell me more")], &[]).await;
+    wait_idle(&app, &id).await;
+    assert_eq!(ollama.last_chat()["options"]["num_predict"], 2048);
+
     let r = app.post_form(&format!("/chat/{id}/delete"), &[]).await;
     assert_eq!(r.status, StatusCode::SEE_OTHER);
     assert_eq!(app.get(&format!("/chat/{id}")).await.status, StatusCode::NOT_FOUND);

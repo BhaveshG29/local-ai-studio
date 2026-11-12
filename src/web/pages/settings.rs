@@ -323,9 +323,8 @@ fn apply_section(s: &mut Settings, section: &str, f: &HashMap<String, String>) -
             if let Some(v) = num::<u32>(f, "top_k", "Top-k")? {
                 g.top_k = v;
             }
-            if let Some(v) = num::<u32>(f, "max_tokens", "Maximum answer length")? {
-                g.max_tokens = v;
-            }
+            // Empty = no limit.
+            g.max_tokens = num::<u32>(f, "max_tokens", "Maximum answer length")?.unwrap_or(0);
             if let Some(v) = num::<f32>(f, "repeat_penalty", "Repetition penalty")? {
                 g.repeat_penalty = v;
             }

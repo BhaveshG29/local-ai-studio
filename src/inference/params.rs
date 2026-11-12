@@ -42,7 +42,8 @@ impl GenParams {
         self.temperature = clamp_f32(self.temperature, 0.0, 2.0);
         self.top_p = clamp_f32(self.top_p, 0.0, 1.0);
         self.top_k = self.top_k.min(1000);
-        self.max_tokens = self.max_tokens.clamp(1, 32_768);
+        // 0 = no limit (until the model stops or the context window is full).
+        self.max_tokens = self.max_tokens.min(262_144);
         self.repeat_penalty = clamp_f32(self.repeat_penalty, 0.5, 2.0);
         self.context_length = self.context_length.clamp(256, 262_144);
         self
@@ -87,7 +88,7 @@ mod tests {
             temperature: f32::NAN,
             top_p: 3.0,
             top_k: 5000,
-            max_tokens: 0,
+            max_tokens: 999_999,
             repeat_penalty: 9.0,
             context_length: 1,
             seed: Some(1),
@@ -96,7 +97,8 @@ mod tests {
         assert_eq!(p.temperature, 0.0);
         assert_eq!(p.top_p, 1.0);
         assert_eq!(p.top_k, 1000);
-        assert_eq!(p.max_tokens, 1);
+        assert_eq!(p.max_tokens, 262_144);
+        assert_eq!(GenParams { max_tokens: 0, ..GenParams::default() }.sanitized().max_tokens, 0, "no limit");
         assert_eq!(p.repeat_penalty, 2.0);
         assert_eq!(p.context_length, 256);
     }

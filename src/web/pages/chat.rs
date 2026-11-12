@@ -884,8 +884,9 @@ pub async fn settings(
         if let Some(v) = parse_num::<u32>("Top-k", &f.top_k)? {
             p.top_k = v;
         }
-        if let Some(v) = parse_num::<u32>("Maximum answer length", &f.max_tokens)? {
-            p.max_tokens = v;
+        // An empty field means no limit (a missing one leaves the setting alone).
+        if f.max_tokens.is_some() {
+            p.max_tokens = parse_num::<u32>("Maximum answer length", &f.max_tokens)?.unwrap_or(0);
         }
         if let Some(v) = parse_num::<f32>("Repetition penalty", &f.repeat_penalty)? {
             p.repeat_penalty = v;

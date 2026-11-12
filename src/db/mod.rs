@@ -237,6 +237,12 @@ const MIGRATIONS: &[&str] = &[
     r#"
     ALTER TABLE messages ADD COLUMN tokens_per_sec REAL;
     "#,
+    // v3: answers used to stop after 1,024 tokens by default; the default is now no limit
+    // (0). Chats that kept the old default follow the new one.
+    r#"
+    UPDATE conversations SET params_json = json_set(params_json, '$.max_tokens', 0)
+    WHERE json_valid(params_json) AND json_extract(params_json, '$.max_tokens') = 1024;
+    "#,
 ];
 
 fn migrate(conn: &Connection) -> Result<()> {
@@ -287,6 +293,41 @@ mod tests {
             })
             .unwrap();
         assert_eq!(n, 1);
+    }
+
+    #[test]
+    fn chats_with_the_old_answer_limit_lose_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("t.db");
+        {
+            // A database from before v3, with one chat on the old default and one changed.
+            let c = Connection::open(&path).unwrap();
+            for sql in &MIGRATIONS[..2] {
+                c.execute_batch(sql).unwrap();
+            }
+            c.pragma_update(None, "user_version", 2).unwrap();
+            for (id, max) in [("old", 1024), ("mine", 300)] {
+                c.execute(
+                    "INSERT INTO conversations (id, title, model_ref, system_prompt, params_json, created_at, updated_at)
+                     VALUES (?1, 't', NULL, '', ?2, 'now', 'now')",
+                    rusqlite::params![id, format!(r#"{{"temperature":0.7,"max_tokens":{max}}}"#)],
+                )
+                .unwrap();
+            }
+        }
+        let db = Db::open(&path).unwrap();
+        let max = |id: &'static str| {
+            db.call_blocking(move |c| {
+                c.query_row(
+                    "SELECT json_extract(params_json, '$.max_tokens') FROM conversations WHERE id = ?1",
+                    [id],
+                    |r| r.get::<_, i64>(0),
+                )
+            })
+            .unwrap()
+        };
+        assert_eq!(max("old"), 0);
+        assert_eq!(max("mine"), 300);
     }
 
     #[test]

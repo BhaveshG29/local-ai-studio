@@ -1,6 +1,6 @@
 [package]
 name = "local-ai-studio"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 # Candle 0.11 needs Rust 1.94 on x86-64 (it uses intrinsics that became safe to call in 1.94).
 # CI checks this version; Clippy's `incompatible_msrv` lint checks our own code against it.

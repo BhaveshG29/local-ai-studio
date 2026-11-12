@@ -148,7 +148,7 @@
           <label class="field" data-tip="Higher = more creative and varied. Lower = more focused."><span>Creativity (temperature)</span><input class="input" type="number" name="temperature" min="0" max="2" step="0.05" value="{{ s.generation.temperature }}"></label>
           <label class="field"><span>Top-p</span><input class="input" type="number" name="top_p" min="0" max="1" step="0.01" value="{{ s.generation.top_p }}"></label>
           <label class="field"><span>Top-k</span><input class="input" type="number" name="top_k" min="0" max="1000" value="{{ s.generation.top_k }}"></label>
-          <label class="field"><span>Max answer length (tokens)</span><input class="input" type="number" name="max_tokens" min="1" max="32768" value="{{ s.generation.max_tokens }}"></label>
+          <label class="field" data-tip="Empty = no limit: the model writes until it is done, or until the context length is used up."><span>Max answer length (tokens)</span><input class="input" type="number" name="max_tokens" min="0" max="262144" value="{% if s.generation.max_tokens > 0 %}{{ s.generation.max_tokens }}{% endif %}" placeholder="no limit"></label>
           <label class="field"><span>Repetition penalty</span><input class="input" type="number" name="repeat_penalty" min="0.5" max="2" step="0.01" value="{{ s.generation.repeat_penalty }}"></label>
           <label class="field"><span>Context length (tokens)</span><input class="input" type="number" name="context_length" min="256" max="262144" step="256" value="{{ s.generation.context_length }}"></label>
           <label class="field"><span>Seed</span><input class="input" type="text" inputmode="numeric" name="seed" value="{{ seed_text }}" placeholder="random"></label>
