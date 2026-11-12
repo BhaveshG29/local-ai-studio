@@ -60,7 +60,7 @@
   {% endif %}
 </div>
 {% else if !running && t.error.is_empty() %}
-<div class="empty card"><p>No speech was found in this recording.</p></div>
+<div class="empty card"><p>{% if t.status == "Cancelled" %}This transcription was cancelled before it finished.{% else %}No speech was found in this recording.{% endif %}</p></div>
 {% endif %}
 
 <div id="del-tx" popover class="popover confirm">

@@ -106,6 +106,10 @@ enum Stop {
     Bracket,
 }
 
+/// How deeply groups and commands may nest. Real formulas stay far below this; each level
+/// costs a few kilobytes of stack.
+const MAX_DEPTH: usize = 100;
+
 struct Parser {
     chars: Vec<char>,
     pos: usize,
@@ -226,10 +230,23 @@ impl Parser {
     }
 
     fn expr(&mut self, stop: Stop) -> Option<Vec<Node>> {
-        self.depth += 1;
-        if self.depth > 60 {
+        self.nested(|p| p.expr_inner(stop))
+    }
+
+    /// Runs `f` one nesting level deeper, refusing input nested beyond [`MAX_DEPTH`]: the
+    /// parser is recursive, and unbounded input would overflow the stack, which aborts the
+    /// whole app (a stack overflow can't be caught like a panic).
+    fn nested<T>(&mut self, f: impl FnOnce(&mut Self) -> Option<T>) -> Option<T> {
+        if self.depth >= MAX_DEPTH {
             return None;
         }
+        self.depth += 1;
+        let out = f(self);
+        self.depth -= 1;
+        out
+    }
+
+    fn expr_inner(&mut self, stop: Stop) -> Option<Vec<Node>> {
         let mut out: Vec<Node> = Vec::new();
         loop {
             self.skip_space();
@@ -283,7 +300,6 @@ impl Parser {
                 }
             }
         }
-        self.depth -= 1;
         Some(merge_numbers(out))
     }
 
@@ -355,7 +371,13 @@ impl Parser {
         Node::Mo(s, kind)
     }
 
+    /// One symbol, command or group. Commands also nest without braces (`\hat\hat…x`), so
+    /// every atom counts towards the nesting limit, not only `{…}` groups.
     fn atom(&mut self) -> Option<Node> {
+        self.nested(Self::atom_inner)
+    }
+
+    fn atom_inner(&mut self) -> Option<Node> {
         self.skip_space();
         let c = self.peek()?;
         match c {
@@ -1077,6 +1099,9 @@ fn render(n: &Node, out: &mut String) {
         Node::Mo(s, kind) => {
             let attrs = match kind {
                 Op::Plain => "",
+                // TeX draws `|` and `\|` as ordinary symbols, tight against their
+                // neighbours: q(z|x), ‖x‖. Browsers would add operator space around them.
+                Op::Fixed if matches!(s.as_str(), "|" | "‖") => " stretchy=\"false\" lspace=\"0\" rspace=\"0\"",
                 Op::Fixed => " stretchy=\"false\"",
                 Op::Fence => " fence=\"true\" stretchy=\"true\" symmetric=\"true\"",
                 Op::Large => " largeop=\"true\" movablelimits=\"true\"",
@@ -1355,6 +1380,25 @@ fn rewrite_prose(text: &str) -> String {
 mod tests {
     use super::*;
 
+    /// Converts on a 2 MiB stack, the size of the server's worker threads.
+    fn on_small_stack(tex: String) -> Option<String> {
+        std::thread::Builder::new().stack_size(2 << 20).spawn(move || to_mathml(&tex, false)).unwrap().join().unwrap()
+    }
+
+    #[test]
+    fn deep_nesting_is_refused_instead_of_overflowing_the_stack() {
+        // Commands nest without braces, so these never pass through a `{…}` group. Each
+        // input stays just under the 8,000-byte limit.
+        for cmd in ["\\hat", "\\not", "\\frac", "\\sqrt", "\\mathbf"] {
+            assert_eq!(on_small_stack(format!("{}x", cmd.repeat(7_990 / cmd.len()))), None, "{cmd}");
+        }
+        assert_eq!(on_small_stack(format!("{}x{}", "{".repeat(3_990), "}".repeat(3_990))), None);
+        // Ordinary nesting still works.
+        let nested = format!("{}x{}", "\\frac{1}{".repeat(12), "}".repeat(12));
+        assert!(on_small_stack(nested).is_some());
+        assert!(on_small_stack("\\hat{\\hat{\\vec{x}}}".into()).is_some());
+    }
+
     fn m(tex: &str) -> String {
         to_mathml(tex, false).unwrap_or_else(|| panic!("not converted: {tex}"))
     }
@@ -1435,6 +1479,10 @@ mod tests {
 
     #[test]
     fn limits_and_fences() {
+        // Bars are tight like in TeX: q(z|x) and D(q||p), not "q(z | x)" and "q | | p".
+        let bar = "<mo stretchy=\"false\" lspace=\"0\" rspace=\"0\">|</mo>";
+        assert_eq!(body("q||p").matches(bar).count(), 2, "{}", body("q||p"));
+        assert!(body(r"\|x\|").contains("<mo stretchy=\"false\" lspace=\"0\" rspace=\"0\">‖</mo>"));
         let s = body(r"\sum_{i=1}^{n} x_i");
         assert!(s.starts_with("<mrow><munderover><mo largeop=\"true\" movablelimits=\"true\">∑</mo>"), "{s}");
         let s = body(r"\int_0^1 f");

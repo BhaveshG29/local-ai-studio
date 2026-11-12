@@ -23,7 +23,7 @@
 {% else %}
 <ul class="jobs">
   {% for j in jobs %}
-  <li class="card job job-{{ j.state_class }}">
+  <li class="card job job-{{ j.state_class }}" id="job-{{ j.id }}">
     <div class="job-head">
       <div class="grow">
         <h2 class="job-title break">{{ j.title }}</h2>
@@ -32,19 +32,18 @@
       <div class="cluster job-actions">
         {% if j.can_pause %}<form method="post" action="/downloads/{{ j.id }}/pause"><button class="btn btn-sm" type="submit"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#pause"></use></svg>Pause</button></form>{% endif %}
         {% if j.can_resume %}<form method="post" action="/downloads/{{ j.id }}/resume"><button class="btn btn-sm btn-primary" type="submit"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#play"></use></svg>{% if j.state == "Failed" %}Retry{% else %}Resume{% endif %}</button></form>{% endif %}
-        {% if j.can_cancel %}
-        <button type="button" class="btn btn-sm btn-ghost" popovertarget="cancel-{{ j.id }}">Cancel</button>
-        <div id="cancel-{{ j.id }}" popover class="popover confirm">
-          <h3>Cancel this download?</h3>
-          <p>Partly downloaded files are deleted. You can start again later from the model page.</p>
-          <div class="cluster"><form method="post" action="/downloads/{{ j.id }}/cancel"><button class="btn btn-danger" type="submit">Cancel download</button></form><button type="button" class="btn" popovertarget="cancel-{{ j.id }}" popovertargetaction="hide">Keep downloading</button></div>
-        </div>
-        {% endif %}
+        {% if j.can_cancel && confirm != j.id %}<a class="btn btn-sm btn-ghost" href="/downloads?confirm={{ j.id }}#job-{{ j.id }}">Cancel</a>{% endif %}
         {% if j.can_remove %}<form method="post" action="/downloads/{{ j.id }}/remove"><button class="btn btn-sm btn-ghost" type="submit" title="Remove from this list">Remove</button></form>{% endif %}
         {% if !j.model_href.is_empty() %}<a class="btn btn-sm" href="{{ j.model_href }}">Open in library</a>{% endif %}
         {% if !j.chat_href.is_empty() %}<a class="btn btn-sm btn-primary" href="{{ j.chat_href }}">{% if j.source == "Ollama" %}Start chatting{% else %}View model{% endif %}</a>{% endif %}
       </div>
     </div>
+    {% if j.can_cancel && confirm == j.id %}
+    <div class="notice notice-warn" role="alert"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#alert"></use></svg><div class="grow">
+      <p><b>Cancel this download?</b> Partly downloaded files are deleted. You can start again later from the model page.</p>
+      <div class="cluster"><form method="post" action="/downloads/{{ j.id }}/cancel"><button class="btn btn-sm btn-danger" type="submit">Cancel download</button></form><a class="btn btn-sm" href="/downloads">Keep downloading</a></div>
+    </div></div>
+    {% endif %}
     <progress class="job-progress" max="100" value="{{ j.percent }}" aria-label="Progress">{{ j.percent }}%</progress>
     <div class="job-meta small">
       <span><b>{{ j.percent_exact }}%</b> · {{ j.done }} of {{ j.total }}</span>

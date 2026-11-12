@@ -83,6 +83,8 @@ pub struct HomePage {
     pub ollama_os: &'static str,
     pub ollama_steps: Vec<&'static str>,
     pub engine_label: String,
+    /// Shown when the computer has an NVIDIA card this copy can't use (built without CUDA).
+    pub engine_hint: Option<&'static str>,
     pub ram_total: String,
     pub ram_free: String,
     pub ram_used_pct: u32,
@@ -123,10 +125,14 @@ pub async fn page(State(state): State<SharedState>, headers: HeaderMap) -> Respo
         })
         .collect();
     let (os, steps) = crate::ollama::install_instructions();
-    let engine_label = match state.inference.device() {
-        Ok((_, l)) => l,
+    let engine_label = match state.inference.device_label() {
+        Ok(l) => l,
         Err(e) => format!("unavailable: {e}"),
     };
+    let unused_nvidia = !cfg!(target_os = "macos")
+        && !state.system.accel().cuda_compiled
+        && snap.gpus.iter().any(|g| g.vendor == "NVIDIA");
+    let engine_hint = unused_nvidia.then_some("this copy can't use your NVIDIA graphics card.");
     let used_pct = if snap.total_ram > 0 {
         ((snap.total_ram - snap.available_ram.min(snap.total_ram)) as f64 / snap.total_ram as f64 * 100.0).round()
             as u32
@@ -143,6 +149,7 @@ pub async fn page(State(state): State<SharedState>, headers: HeaderMap) -> Respo
         ollama_os: os,
         ollama_steps: steps,
         engine_label,
+        engine_hint,
         ram_total: human_bytes(snap.total_ram),
         ram_free: human_bytes(snap.available_ram),
         ram_used_pct: used_pct,

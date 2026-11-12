@@ -186,7 +186,8 @@ pub fn safe_join(base: &Path, rel: &str) -> Option<PathBuf> {
 pub fn parse_quantization(file_name: &str) -> Option<String> {
     static RE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
         regex::Regex::new(
-            r"(?i)(?:^|[-_.])((?:I?Q[1-8](?:_[0-9])?(?:_K)?(?:_(?:XXS|XS|S|M|L|XL|NL))?)|TQ[12]_0|MXFP4|BF16|F16|F32|FP16|FP8)(?:[-_.]|$)",
+            // `(?:_[0-9])*`: ARM-repacked files are named Q4_0_4_4, Q4_0_4_8 and Q4_0_8_8.
+            r"(?i)(?:^|[-_.])((?:I?Q[1-8](?:_[0-9])*(?:_K)?(?:_(?:XXS|XS|S|M|L|XL|NL))?)|TQ[12]_0|MXFP4|BF16|F16|F32|FP16|FP8)(?:[-_.]|$)",
         )
         .expect("valid regex")
     });
@@ -373,6 +374,9 @@ mod tests {
         assert_eq!(parse_quantization("qwen2.5-0.5b-instruct-q4_k_m.gguf").as_deref(), Some("Q4_K_M"));
         assert_eq!(parse_quantization("Llama-3.2-1B-Instruct-IQ3_XS.gguf").as_deref(), Some("IQ3_XS"));
         assert_eq!(parse_quantization("model-q8_0.gguf").as_deref(), Some("Q8_0"));
+        // ARM-repacked files are a different (unsupported) type, not plain Q4_0.
+        assert_eq!(parse_quantization("Llama-3.2-1B-Instruct-Q4_0_4_4.gguf").as_deref(), Some("Q4_0_4_4"));
+        assert_eq!(parse_quantization("model-Q4_K_M-00001-of-00002.gguf").as_deref(), Some("Q4_K_M"));
         assert_eq!(parse_quantization("qwen2.5-0.5b-instruct-fp16.gguf").as_deref(), Some("F16"));
         assert_eq!(parse_quantization("model.gguf"), None);
     }

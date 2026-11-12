@@ -1,7 +1,7 @@
 //! The download manager page. Auto-refreshes every second while something is downloading.
 
 use askama::Template;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::HeaderMap;
 use axum::response::Response;
 
@@ -45,14 +45,22 @@ pub struct DownloadsPage {
     pub partial_dir: String,
     pub free_space: String,
     pub paused_count: usize,
+    /// The download whose "Cancel" was pressed: it asks for confirmation inline, and the
+    /// page stops refreshing meanwhile (a refresh would close a pop-up immediately).
+    pub confirm: String,
 }
 
-pub async fn page(State(state): State<SharedState>, headers: HeaderMap) -> Response {
+#[derive(serde::Deserialize, Default)]
+pub struct DownloadsQuery {
+    confirm: Option<String>,
+}
+
+pub async fn page(State(state): State<SharedState>, headers: HeaderMap, Query(q): Query<DownloadsQuery>) -> Response {
     let jobs = state.downloads.list().await.unwrap_or_default();
     let active = jobs.iter().filter(|j| j.row.state.is_active()).count();
     let ctx = PageCtx::new(&state, &headers, "Downloads", "downloads")
         .at("/downloads")
-        .with_refresh((active > 0).then_some(1));
+        .with_refresh((active > 0 && q.confirm.is_none()).then_some(1));
     let settings = state.settings();
     let models_dir = settings.models_dir(&state.paths);
     let free = state.system.available_space(&models_dir).await;
@@ -111,6 +119,7 @@ pub async fn page(State(state): State<SharedState>, headers: HeaderMap) -> Respo
         models_dir: models_dir.to_string_lossy().to_string(),
         partial_dir: settings.partial_dir(&state.paths).to_string_lossy().to_string(),
         free_space: free.map(human_bytes).unwrap_or_else(|| "unknown".into()),
+        confirm: q.confirm.unwrap_or_default(),
     };
     render(&ctx, &page)
 }

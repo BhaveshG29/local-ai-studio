@@ -376,6 +376,16 @@ impl DownloadManager {
     ) -> AppResult<()> {
         let model_dir = self.repo_dir(&row.repo_id);
         tokio::fs::create_dir_all(&model_dir).await?;
+        // Files finished in an earlier session must still be where this run puts the model.
+        // If the models folder was changed in Settings since (the disk-full message suggests
+        // it), they are fetched again rather than assumed present.
+        for f in row.files.iter_mut().filter(|f| f.done) {
+            let present = match safe_join(&model_dir, &f.local_path) {
+                Some(p) => tokio::fs::metadata(&p).await.map(|m| m.len() == f.size).unwrap_or(false),
+                None => false,
+            };
+            f.done = present;
+        }
         // Progress already completed (files done in an earlier session).
         let mut done: u64 = 0;
         for f in &row.files {
@@ -431,7 +441,7 @@ impl DownloadManager {
                     .await
                     .map(|m| m.len())
                     .unwrap_or(0);
-                if std::fs::hard_link(&src, &final_path).is_ok() || tokio::fs::copy(&src, &final_path).await.is_ok() {
+                if std::fs::hard_link(&src, &final_path).is_ok() || copy_then_rename(&src, &final_path).await.is_ok() {
                     tracing::info!("reused identical file {} for {}", src.display(), file.local_path);
                     progress.done.fetch_add(file.size.saturating_sub(before), Ordering::Relaxed);
                     row.files[idx].done = true;
@@ -439,7 +449,10 @@ impl DownloadManager {
                     continue;
                 }
             }
+            // Network errors and failed checksums are counted separately: a dropped connection
+            // must not use up the one extra download a corrupted file gets.
             let mut attempt = 0u32;
+            let mut corrupt = 0u32;
             loop {
                 attempt += 1;
                 match self.download_file(row, &file, &final_path, cancel, progress).await {
@@ -454,10 +467,17 @@ impl DownloadManager {
                         }
                     }
                     Err(DlError::Retryable(e)) => return Err(e),
-                    Err(DlError::Corrupt(_)) if attempt < 2 => {
+                    Err(DlError::Corrupt(e)) => {
+                        // The file was deleted, so its bytes no longer count as downloaded.
+                        progress
+                            .done
+                            .fetch_sub(file.size.min(progress.done.load(Ordering::Relaxed)), Ordering::Relaxed);
+                        corrupt += 1;
+                        if corrupt >= 2 {
+                            return Err(e);
+                        }
                         tracing::warn!("{} failed verification; downloading it once more", file.path);
                     }
-                    Err(DlError::Corrupt(e)) => return Err(e),
                 }
             }
             row.files[idx].done = true;
@@ -655,8 +675,8 @@ impl DownloadManager {
             tokio::fs::create_dir_all(parent).await.map_err(fatal_io)?;
         }
         if tokio::fs::rename(part, final_path).await.is_err() {
-            // Different disks: copy then remove.
-            tokio::fs::copy(part, final_path).await.map_err(fatal_io)?;
+            // Different disks: copy, then remove the partial file.
+            copy_then_rename(part, final_path).await.map_err(fatal_io)?;
             tokio::fs::remove_file(part).await.ok();
         }
         Ok(())
@@ -775,6 +795,12 @@ impl DownloadManager {
     }
 
     pub async fn clear_finished(&self) -> AppResult<usize> {
+        // Failed jobs keep their partial files so Retry can resume. Once they leave the list
+        // nothing could resume them, so the files go too.
+        let rows = self.inner.db.call(db::downloads::list).await?;
+        for row in rows.iter().filter(|r| r.state == DownloadState::Failed) {
+            self.remove_partials(row).await;
+        }
         Ok(self.inner.db.call(db::downloads::delete_finished).await?)
     }
 
@@ -848,8 +874,27 @@ enum DlError {
     Fatal(AppError),
 }
 
+/// Copies `src` to a temporary name next to `dst`, flushes it to disk and renames it into
+/// place, so an interrupted copy never leaves a full-size but incomplete file at `dst` (a file
+/// of the right size there counts as finished).
+async fn copy_then_rename(src: &Path, dst: &Path) -> std::io::Result<()> {
+    let name = dst.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let tmp = dst.with_file_name(format!("{name}.copying"));
+    let result = async {
+        tokio::fs::copy(src, &tmp).await?;
+        tokio::fs::File::open(&tmp).await?.sync_all().await?;
+        tokio::fs::rename(&tmp, dst).await
+    }
+    .await;
+    if result.is_err() {
+        tokio::fs::remove_file(&tmp).await.ok();
+    }
+    result
+}
+
 fn fatal_io(e: std::io::Error) -> DlError {
-    let msg = if e.raw_os_error() == Some(28) || e.to_string().contains("No space left") {
+    // StorageFull covers ENOSPC on Unix and ERROR_DISK_FULL / ERROR_HANDLE_DISK_FULL on Windows.
+    let msg = if matches!(e.kind(), std::io::ErrorKind::StorageFull | std::io::ErrorKind::QuotaExceeded) {
         "Your disk is full. Free some space, then press Retry — the download will resume.".to_string()
     } else {
         format!("Could not write the file: {e}")

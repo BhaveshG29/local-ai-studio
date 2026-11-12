@@ -2,158 +2,219 @@
 
 **Author:** Bhavesh G and Claude (Opus 5.5)
 
-*Find, download and run AI models on your own computer — privately, without the cloud.*
+[![CI](https://github.com/BhaveshG29/local-ai-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/BhaveshG29/local-ai-studio/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Rust 1.94+](https://img.shields.io/badge/rust-1.94%2B-orange.svg)](https://rustup.rs)
 
----
+Find, download and run AI models on your own computer, privately and without the cloud.
 
-## 1. Abstract
+![The Local AI Studio home page](docs/screenshots/home-midnight.webp)
+
+## 1. Overview
 
 Local AI Studio is a single program that turns your computer into a private AI workstation.
-It lets you browse the model catalogs of **Hugging Face** and **Ollama**, download models with a
-real download manager, see whether a model can run on your hardware, and then use it: chat with
-text models, ask vision models about pictures and videos, transcribe recordings with Whisper, and
-create images with Stable Diffusion.
+You can browse the model catalogs of Hugging Face and Ollama, download models, see whether
+they will run on your hardware, and then use them: chat with language models, ask vision
+models about pictures and videos, transcribe recordings with Whisper, and create images with
+Stable Diffusion.
 
-Everything runs locally. Inference uses a native Rust engine built on
-[Candle](https://github.com/huggingface/candle), and — when it is installed — the
-[Ollama](https://ollama.com) server for the thousands of models it supports. The interface is a
-web page served by the program on `127.0.0.1`; it is written in plain HTML and CSS with **no
-JavaScript at all**, so it works in any browser, stays fast and has a very small attack surface.
+Everything happens on your machine. The program starts a small web server on `127.0.0.1` and
+opens its interface in your browser; nothing you type, upload or generate is sent anywhere.
+Models run in a built-in engine written in Rust on top of Hugging Face's
+[Candle](https://github.com/huggingface/candle), or in [Ollama](https://ollama.com) if you
+have it installed, which adds thousands more models.
 
-Why it is useful:
+The built-in engine uses your graphics card when it can. Apple Silicon Macs use it through
+Metal out of the box, and NVIDIA cards through CUDA when you build the program with the
+included build script (see [GPU acceleration](#6-gpu-acceleration)). The interface is plain
+HTML and CSS without any JavaScript, so it works in every browser and stays fast.
 
-- **Private by default.** Prompts, files and answers never leave your computer. The server
-  listens only on this machine unless you explicitly allow your network.
-- **One place for both ecosystems.** Hugging Face files and Ollama models are listed, downloaded,
-  inspected and deleted from the same library.
-- **Honest about hardware.** Every model page estimates the memory it needs and says plainly when
-  something won't run — and why — instead of failing later.
-- **Made for non-experts.** Plain language, big buttons, empty states that say what to do next,
-  and six carefully designed themes.
+## 2. Download and run
 
-## 2. Features
+There are two ways to get Local AI Studio. Downloading a release is the quickest. Building
+from source takes a few minutes more, and it is how you get NVIDIA GPU support on Linux and
+Windows.
 
-Legend: ✅ implemented and tested · 🧪 implemented, depends on your hardware/models (see
-[Testing](#9-testing)) · 🚧 not implemented (see [Future improvements](#12-future-improvements)).
+### Download a release
 
-### Model discovery
-- ✅ Hugging Face search with filters (task, format, model family, author) and sorting (trending,
-  downloads, likes, recently updated, newest), with pagination and rate-limit awareness.
-- ✅ Model pages: author, task, formats, parameter count, downloads, likes, license, file list with
-  sizes, model card, and a **“Can I run it?”** verdict with a per-file memory estimate.
-- ✅ Ollama library browsing (search, “sees images”/tools/thinking filters, versions with size,
-  context window and input types). ollama.com has no public catalog API, so its pages are read
-  defensively and cached; if its layout changes, the app shows an error instead of wrong data.
-- ✅ Offline index: everything you browse is stored in a local full-text index (SQLite FTS5) that
-  can be searched without internet; **Update index** crawls both catalogs on request (it never
-  tries to mirror whole catalogs).
-- ✅ Graceful behaviour without internet, during Hub outages (cached pages are shown with a
-  notice) and when rate-limited.
+Open the [Releases page](https://github.com/BhaveshG29/local-ai-studio/releases) and download
+the file for your computer:
 
-### Model downloading
-- ✅ Download manager with progress, speed, time remaining, pause, resume, cancel, retry.
-- ✅ Resumes from where it stopped (HTTP ranges), also after the app was closed or crashed.
-- ✅ Every file is verified: SHA-256 for large (LFS/Xet) files, git blob id for small files.
-- ✅ Disk-space check before starting; configurable models and download folders.
-- ✅ Duplicate detection (same model twice is refused; identical files are hard-linked, not
-  stored twice).
-- ✅ Safetensors, sharded checkpoints, tokenizer/config files, diffusers folders (including the
-  CLIP tokenizer files Stable Diffusion needs from other repositories).
-- ✅ Gated and private repositories with a Hugging Face token (stored in the OS keychain).
-- ✅ Ollama pulls with progress; Ollama install instructions per OS when it isn't running.
+| Your computer | File |
+|---|---|
+| Windows 10 or 11, 64-bit | `local-ai-studio-<version>-x86_64-pc-windows-msvc.zip` |
+| Mac with Apple Silicon (M1 or newer) | `local-ai-studio-<version>-aarch64-apple-darwin.tar.gz` |
+| Mac with an Intel processor | `local-ai-studio-<version>-x86_64-apple-darwin.tar.gz` |
+| Linux, 64-bit (Ubuntu 22.04 or newer, or similar) | `local-ai-studio-<version>-x86_64-unknown-linux-gnu.tar.gz` |
 
-### Local inference
-- ✅ Backend abstraction (`ChatEngine` trait) with two engines: the built-in Candle engine and
-  Ollama. Adding another engine means implementing one trait.
-- 🧪 Built-in engine, **GGUF** chat models: Llama (2/3/3.x), Mistral, Qwen 2/2.5/3, Phi-3/3.5/4,
-  Gemma 1/2/3, GLM-4, LFM2 — quantisations Q4_0…Q8_0, K-quants (Q2_K–Q6_K), F16/F32. IQ/TQ
-  quantisations and split files run through Ollama instead.
-- 🧪 Built-in engine, **safetensors** chat models: Llama, Mistral, Qwen 2/3, Phi-3 (needs much
-  more memory than GGUF).
-- ✅ Chat templates from the model itself (Jinja via MiniJinja), context-window management,
-  stop/cancel, seed, temperature, top-p, top-k, repetition penalty, max tokens.
-- ✅ Hardware detection: CPU model/cores/features, RAM, disks, GPUs (NVIDIA via `nvidia-smi`,
-  Apple via `system_profiler`, AMD/Intel via sysfs/CIM where available).
-- 🧪 GPU acceleration in the built-in engine **only** when built with `--features cuda` (NVIDIA)
-  or `--features metal` (Apple Silicon); the default build is CPU-only and says so. Ollama uses
-  GPUs on its own.
-- ✅ Memory management: idle models are unloaded after a configurable time; a limit on loaded
-  models; a load is refused with an explanation when a model clearly can't fit.
+Unpack it and start the program inside. On macOS and Linux:
+
+```bash
+tar xzf local-ai-studio-*.tar.gz
+cd local-ai-studio-*/
+./local-ai-studio
+```
+
+On Windows, unzip the file and double-click `local-ai-studio.exe`.
+
+The release builds are not code-signed yet. If Windows SmartScreen stops the program, choose
+**More info → Run anyway**. On a Mac, remove the download quarantine once before the first
+start:
+
+```bash
+xattr -d com.apple.quarantine local-ai-studio
+```
+
+The Apple Silicon release runs models on the GPU. The Linux and Windows releases run the
+built-in engine on the processor; to use an NVIDIA card, build from source as described next,
+or install Ollama, which uses the card by itself.
+
+### Build from source
+
+You need [Rust](https://rustup.rs) 1.94 or newer and a C compiler:
+
+| System | Install first |
+|---|---|
+| Ubuntu, Debian | `sudo apt install build-essential git` |
+| Fedora | `sudo dnf groupinstall "Development Tools"` |
+| macOS | `xcode-select --install` |
+| Windows | [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with "Desktop development with C++", and Git |
+
+Then install Rust with the command from [rustup.rs](https://rustup.rs) (on Windows, keep the
+default MSVC toolchain). If your computer has an NVIDIA graphics card, also install NVIDIA's
+[CUDA toolkit](https://developer.nvidia.com/cuda-downloads).
+
+Get the code and build it with the build script, which checks your hardware and turns on GPU
+support where it can:
+
+```bash
+git clone https://github.com/BhaveshG29/local-ai-studio
+cd local-ai-studio
+./scripts/build.sh
+./target/release/local-ai-studio
+```
+
+On Windows, in PowerShell:
+
+```powershell
+git clone https://github.com/BhaveshG29/local-ai-studio
+cd local-ai-studio
+powershell -ExecutionPolicy Bypass -File scripts\build.ps1
+.\target\release\local-ai-studio.exe
+```
+
+| Your computer | The built-in engine runs on |
+|---|---|
+| Mac with Apple Silicon | the GPU, through Metal |
+| Linux or Windows with an NVIDIA card and the CUDA toolkit | the GPU, through CUDA |
+| Anything else | the processor |
+
+The first build takes several minutes (longer with CUDA, whose kernels are compiled for your
+card); later builds are quick. If you prefer plain Cargo, `cargo build --release` gives the
+same result except that you add `--features cuda` yourself for an NVIDIA card.
+
+### First steps
+
+When the program starts, your browser opens at <http://127.0.0.1:8765>. If it doesn't, open
+that address yourself.
+
+1. Go to **Discover** and search for a model. A good first one is
+   `Qwen/Qwen2.5-1.5B-Instruct-GGUF`, about 1 GB. Each model page tells you whether it fits
+   your computer.
+2. Press **Download** and follow the progress on **Downloads**.
+3. Open **Chat**, pick the model and write a message. The first answer takes a moment while
+   the model loads.
+
+Other good first downloads are `openai/whisper-base` for speech to text,
+`stabilityai/sd-turbo` for images and, with Ollama, `gemma3`, which can also describe
+pictures.
+
+To stop the program, press **Ctrl+C** in its terminal or use **Settings → About → Stop Local
+AI Studio**.
+
+### Command-line options
+
+`local-ai-studio --help` lists them all. The ones you are most likely to need:
+
+| Option | What it does |
+|---|---|
+| `--port 9000` | Use another port than 8765 |
+| `--no-browser` | Don't open the browser on start |
+| `--data-dir PATH` | Keep settings, database, models and logs in another folder (also `LOCAL_AI_STUDIO_HOME`) |
+| `--host 0.0.0.0 --allow-network` | Let other devices on your network connect; they need the access token from Settings → Server |
+| `--no-keychain` | Keep the Hugging Face token in memory only |
+| `--system-info` | Print the detected hardware as JSON and exit |
+
+## 3. Features
+
+### Finding and downloading models
+
+- Search Hugging Face by task, format, model family and author, sorted by trending,
+  downloads, likes or date. Browse the Ollama library too, including which models can see
+  images, use tools or reason step by step.
+- Every model page shows its files, license and parameter count, and estimates how much
+  memory each version needs, so you know before downloading whether it will run.
+- Downloads can be paused and resumed (also after a restart), are retried when the connection
+  drops, and every file is checked against the checksum Hugging Face publishes. Gated models
+  work with a Hugging Face token, which is kept in your system's keychain.
+- Everything you browse is saved in a local search index that also works offline.
 
 ### Chat
-- ✅ Multiple conversations with history, rename, delete, persistent storage (SQLite).
-- ✅ Streaming answers (streamed HTML — no JavaScript), Stop, Regenerate, Continue, Edit a previous
-  message (re-asks from there), Copy, Save as Markdown.
-- ✅ Markdown rendering with tables and task lists, code highlighting (Syntect), one-click
-  code selection and per-block download; “thinking” sections shown collapsed.
-- ✅ Maths: TeX in answers (`$…$`, `$$…$$`, `\(…\)`, `\[…\]`) is converted to MathML on the
-  server and drawn by the browser — fractions, scripts, Greek, `\mathbb`/`\mathcal`, big
-  operators with limits, `\left…\right`, matrices, `cases`, `aligned`. Notation the converter
-  doesn't know is shown as TeX source rather than drawn wrongly.
-- ✅ Timestamps, token counts and speed, per-chat system prompt and generation settings, model
-  switching, export/import (JSON, Markdown), OpenAI-compatible API.
 
-### Multimodal
-- 🧪 **Image understanding** with vision models served by Ollama (e.g. Gemma 3, Llama 3.2 Vision,
-  Qwen2.5-VL): upload or drag files onto the file picker, previews in the conversation, several
-  images per message. Text-only models refuse images with an explanation — nothing is faked.
-- 🧪 **Audio**: upload audio; it is transcribed with a local Whisper model and the transcript is
-  given to the chat model (marked as such). The **Speech to text** page transcribes or translates
-  to English and exports TXT/SRT subtitles.
-- 🧪 **Video**: upload a video; evenly spaced frames (ffmpeg) go to a vision model and the sound is
-  transcribed with Whisper. Requires ffmpeg.
-- 🚧 Text-to-speech and audio generation — not implemented.
+- Several conversations with history and renaming, export as JSON or Markdown, and import
+  from JSON.
+- Answers appear as they are written. You can stop them, regenerate, continue, or edit an
+  earlier message and ask again.
+- Markdown with tables and highlighted code, and maths: TeX formulas are drawn as real
+  formulas.
+- Each chat has its own system prompt and generation settings (temperature, top-p, top-k,
+  answer length, context length, seed).
 
-### Image and video generation
-- 🧪 **Image generation** with Stable Diffusion 1.5, 2.1, SD-Turbo, SDXL and SDXL-Turbo in the
-  built-in engine: prompt, negative prompt, size/aspect presets, steps, guidance, seed, 1–4 images,
-  live progress, cancel, preview, download, save to a folder of your choice, history with
-  settings (“Use again”).
-- 🚧 Video generation — not implemented (no suitable Rust-native model yet; see
-  [Future improvements](#12-future-improvements)). The app never presents a model as able to
-  generate video.
+### Pictures, audio and video
 
-### Model management
-- ✅ Library of Hugging Face, imported and Ollama models: source, format, architecture, size,
-  quantisation, compatibility, last used, location.
-- ✅ Load, unload, delete, rename, inspect, open folder, check again, update (Ollama re-pull /
-  Hugging Face revision check), import an existing `.gguf` from disk without copying it.
+- Attach pictures for vision models such as Gemma 3, Llama 3.2 Vision or Qwen2.5-VL (these
+  run through Ollama).
+- Audio is transcribed with a local Whisper model and handed to the chat model. The **Speech
+  to text** page also translates into English and exports TXT and SRT subtitles.
+- For videos, evenly spaced frames go to a vision model and the sound is transcribed (this
+  needs ffmpeg).
 
-### Hardware monitoring
-- ✅ System page with OS, CPU, RAM, swap, GPUs and VRAM where detectable, disks, loaded models,
-  which engine can use which hardware, and a model-size guide. Estimates are labelled as estimates;
-  nothing is guaranteed from a parameter count.
+### Creating images
 
-### Themes
-- ✅ Six themes that change palette, background, typography, buttons, cards, sidebar and inputs —
-  not just an accent colour. Switch from any page (palette button) or in Settings; the choice is
-  saved.
+Stable Diffusion 1.5, 2.1, SD-Turbo, SDXL and SDXL-Turbo run in the built-in engine. You set
+the prompt, negative prompt, size, steps, guidance and seed, create up to four images at a
+time, and can reuse the settings of any earlier image.
 
-| Theme | Mode | Character |
-|---|---|---|
-| Midnight | dark | Night-sky indigo, faint star field, moonlight-blue pill buttons, gold “moon” markers (Manrope) |
-| Graphite | dark | Drafting-table charcoal on a faint grid, square edges, chalk-white buttons, condensed IBM Plex Sans |
-| Neon Cyberpunk | dark | Violet-black with magenta and cyan, HUD corner brackets, cut-corner buttons, Orbitron + Space Grotesk |
-| Pure Minimal | light | White paper, black ink, hairlines, one blue for focus, a dot marks the current page (Inter) |
-| Warm Studio | light | Linen workspace, walnut-wood sidebar, amber key-cap buttons, Fraunces headings + Nunito Sans |
-| Modern Glass | light | Frosted panels floating over a pastel aurora, gradient pills (Plus Jakarta Sans) |
+### Your library and your hardware
 
-### Also
-- ✅ Local server with configurable host/port, port-conflict detection (finds the next free port,
-  or reuses an instance that is already running), health check, graceful shutdown (answers are
-  saved, downloads paused), logs to daily files.
-- ✅ JSON API (`/api/health`, `/api/v1/system`, `/api/v1/models`, `/api/v1/downloads`,
-  `/api/v1/chat`) and OpenAI-compatible `/v1/models` and `/v1/chat/completions` (text only).
-- ✅ Optional network access with a per-start access token, explicit opt-in and warnings.
-- ✅ Keyboard shortcuts, skip link, visible focus, screen-reader labels, reduced-motion support,
-  responsive layout down to phone width, print styles for chats.
+- One library holds Hugging Face downloads, Ollama models, and GGUF files you already have
+  (they are used where they are, not copied).
+- Models can be loaded, unloaded, renamed, checked again, updated and deleted.
+- The **System** page shows your processor, memory, graphics cards and disks, which engine
+  uses which hardware, and which model sizes fit.
 
-## 3. Screenshots
+### Also included
 
-Screenshots are stored in [`docs/screenshots/`](docs/screenshots/). They show pages served by
-the running application during a test session on Ubuntu 24.04 (Intel Core Ultra 9 185H, RTX 4060
-Laptop GPU) with real models, real catalog data and real answers; only the computer's name and
-the home folder in paths were replaced. Each page is shown in a different theme.
+- Six themes that change the whole look, not just a colour: Midnight, Graphite, Neon
+  Cyberpunk, Pure Minimal, Warm Studio and Modern Glass.
+- An OpenAI-compatible API for other programs on your computer (see
+  [Configuration](#7-configuration)).
+- Optional access from other devices on your network, protected by an access token.
+- Keyboard shortcuts, screen-reader labels, reduced-motion support, and a layout that works
+  on a phone.
+
+### Which models run where
+
+The built-in engine runs GGUF chat models of the Llama, Mistral, Qwen 2/2.5/3,
+Phi-3/3.5/4, Gemma 1/2/3, GLM-4 and LFM2 families (quantisations Q2_K to Q8_0, F16 and F32),
+and safetensors chat models of the Llama, Mistral, Qwen 2/3 and Phi-3 families. Other GGUF
+files, such as IQ quantisations or models split into several files, run through Ollama; model
+pages say so and offer it. Text-to-speech and video generation are not available yet.
+
+## 4. Screenshots
+
+These were taken from the running app on Ubuntu 24.04 (Intel Core Ultra 9 185H, RTX 4060
+Laptop GPU) with real models and real answers. Each page is shown in a different theme.
 
 | | |
 |---|---|
@@ -162,427 +223,250 @@ the home folder in paths were replaced. Each page is shown in a different theme.
 | ![Library](docs/screenshots/library-minimal.webp) Library (Pure Minimal) | ![Settings](docs/screenshots/settings-warm.webp) Settings (Warm Studio) |
 | ![System](docs/screenshots/system-glass.webp) System (Modern Glass) | ![Phone](docs/screenshots/chat-phone-glass.webp) Chat on a phone-sized window (Modern Glass) |
 
-All six themes on the same page: [`docs/screenshots/themes/`](docs/screenshots/themes/).
+The same page in all six themes is in [`docs/screenshots/themes/`](docs/screenshots/themes/).
 
-## 4. System requirements
+## 5. System requirements
 
 | | Minimum | Recommended |
 |---|---|---|
-| Operating system | Windows 10/11 (x64), Linux x86_64 (glibc 2.31+), macOS 13+ (Intel or Apple Silicon) | latest versions |
-| CPU | 64-bit, 4 cores; AVX2 (x86) or NEON (ARM) strongly recommended | 8+ cores |
-| RAM | 8 GB (small 0.5–3 B models) | 16 GB (7–8 B models), 32 GB+ for larger |
-| GPU | none required | NVIDIA with recent drivers (via Ollama or a CUDA build), or Apple Silicon (via Ollama or a Metal build) |
-| Disk | 200 MB for the app + data | SSD with 20 GB+ free for models (0.5–10 GB each) |
-| Browser | any current browser (Firefox, Chrome, Edge, Safari) | — |
+| Operating system | Windows 10 or 11 (64-bit), macOS 13 or newer, 64-bit Linux (the release build needs glibc 2.35 or newer, as in Ubuntu 22.04) | Current versions |
+| Processor | 64-bit, 4 cores; AVX2 (Intel, AMD) or NEON (ARM) strongly recommended | 8 cores or more |
+| Memory | 8 GB, for small models (0.5 to 3 billion parameters) | 16 GB for 7 to 8 billion, 32 GB or more for larger ones |
+| Graphics card | Not required | Apple Silicon, or an NVIDIA card (see [GPU acceleration](#6-gpu-acceleration)) |
+| Disk | 200 MB for the app | An SSD with 20 GB or more free for models (0.5 to 10 GB each) |
+| Browser | Any current one: Firefox, Chrome, Edge, Safari | |
 
 Optional software:
 
-- **Ollama** — more models (including vision models) and automatic GPU use: <https://ollama.com/download>
-- **ffmpeg** — video in chats and video transcription: <https://ffmpeg.org/download.html>
+- [Ollama](https://ollama.com/download) for many more models, vision models, and automatic GPU
+  use on NVIDIA and AMD cards.
+- [ffmpeg](https://ffmpeg.org/download.html) for videos in chats and video transcription.
 
-To **build** from source you need Rust 1.94 or newer (<https://rustup.rs>; the Candle engine
-needs 1.94 on x86-64 processors) and a C compiler
-(SQLite is compiled from source): Visual Studio Build Tools (“Desktop development with C++”) on
-Windows, Xcode Command Line Tools on macOS, `build-essential`/`gcc` on Linux. No other system
-libraries are needed.
+## 6. GPU acceleration
 
-## 5. Installation and execution
+The built-in engine chooses its hardware with **Settings → Inference → Hardware**, which is
+set to *Automatic*: it uses a graphics card when this copy of the program can, and the
+processor otherwise.
 
-### Get the code
+- **Apple Silicon Macs:** Metal is always included, so models run on the GPU without any
+  setup.
+- **NVIDIA cards on Linux and Windows:** CUDA is included when you build the program with
+  `scripts/build.sh` or `scripts/build.ps1` on a computer with the CUDA toolkit. Its kernels
+  are compiled for the card in that computer, which is also why the downloadable Linux and
+  Windows releases don't include CUDA.
+- **Other graphics cards and Intel Macs:** the built-in engine uses the processor. Ollama can
+  use many AMD cards.
 
-```bash
-git clone https://github.com/BhaveshG29/local-ai-studio
-cd local-ai-studio
-```
+If a model doesn't fit in the graphics card's memory, *Automatic* loads it on the processor
+instead, and the System page shows where each model runs. Ollama manages its own GPU use. When
+the built-in engine can't use your card but Ollama can, model pages offer the Ollama version
+first (**Settings → Inference → When a model can run in both engines**).
 
-(or download the ZIP from the repository page and unpack it; or download a pre-built archive from
-the Releases page, which contains the program — skip to *Run*).
+On the processor, prompts are read with all threads while answers are written with the
+fastest cores only, because the slower efficiency cores hold the others back. On an Intel
+Core Ultra 9 185H this triples the writing speed of Qwen2.5-0.5B (18.8 instead of 6.3 tokens
+per second). **Settings → Inference → Processor threads** sets one number for both if you want
+to choose yourself. For the fastest CPU build on your own machine (not to share with others),
+build with `RUSTFLAGS="-C target-cpu=native"`.
 
-### Build
+## 7. Configuration
 
-**Linux**
+Everything can be changed on the **Settings** page. The settings are stored in a
+`config.toml` file in the data folder:
 
-```bash
-sudo apt install build-essential          # Debian/Ubuntu; Fedora: sudo dnf groupinstall "Development Tools"
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-cargo build --release
-```
-
-**macOS**
-
-```bash
-xcode-select --install
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-cargo build --release
-```
-
-**Windows** (PowerShell)
-
-1. Install *Visual Studio Build Tools* with “Desktop development with C++”.
-2. Install Rust from <https://rustup.rs> (choose the default MSVC toolchain).
-3. `cargo build --release`
-
-GPU builds of the built-in engine (optional):
-
-```bash
-cargo build --release --features cuda     # NVIDIA: needs the CUDA toolkit (nvcc) 12.x
-cargo build --release --features metal    # Apple Silicon: needs Xcode command line tools
-```
-
-Faster CPU inference on the machine you build on (the program then only runs on processors
-with the same features, so don't share that build):
-
-```bash
-RUSTFLAGS="-C target-cpu=native" cargo build --release
-```
-
-The built-in engine reads prompts with all processor threads but writes answers with the
-fastest cores only (the performance cores of recent Intel and Apple Silicon processors, one thread
-per core elsewhere). Writing is a chain of small steps that every thread must finish before the
-next token, so slow cores hold the fast ones back. On an Intel Core Ultra 9 185H with
-Qwen2.5‑0.5B Q4_K_M we measured 18.8 tokens/s writing on the 6 performance cores against
-6.2–6.4 tokens/s on all 22 threads, while reading a 1,182-token prompt was about twice as fast on
-all 22 threads (≈ 41 against ≈ 22 tokens/s); splitting the work keeps both (18.7 tokens/s
-writing, ≈ 41 tokens/s reading). Settings → Inference → *Processor threads* (or the
-`RAYON_NUM_THREADS` variable) sets one number for both; the System page shows what is in use.
-
-### Run
-
-```bash
-./target/release/local-ai-studio          # Windows: .\target\release\local-ai-studio.exe
-```
-
-Your browser opens at <http://127.0.0.1:8765>. If it doesn't, open that address yourself.
-Stop the app with **Ctrl+C** in its terminal, or with **Settings → About → Stop Local AI Studio**.
-
-Useful options (`local-ai-studio --help` lists all):
-
-| Option | Meaning |
+| System | Data folder |
 |---|---|
-| `--port 9000` | use another port |
-| `--no-browser` | don't open the browser |
-| `--data-dir PATH` | keep settings, database, models and logs in another folder (also `LOCAL_AI_STUDIO_HOME`) |
-| `--host 0.0.0.0 --allow-network` | let other devices on your network connect (they must enter the access token shown in Settings → Server) |
-| `--no-keychain` | keep the Hugging Face token in memory only |
-| `--system-info` | print the detected hardware as JSON and exit |
+| Linux | `~/.local/share/local-ai-studio` |
+| macOS | `~/Library/Application Support/dev.LocalAIStudio.local-ai-studio` |
+| Windows | `%APPDATA%\LocalAIStudio\local-ai-studio\data` |
 
-Data folders: Linux `~/.local/share/local-ai-studio`, macOS
-`~/Library/Application Support/dev.LocalAIStudio.local-ai-studio`, Windows
-`%APPDATA%\LocalAIStudio\local-ai-studio\data`. An annotated example configuration is in
-[`config/local-ai-studio.example.toml`](config/local-ai-studio.example.toml).
+The annotated [`config/local-ai-studio.example.toml`](config/local-ai-studio.example.toml)
+lists every option with its default.
 
-### Configure Ollama (optional)
+### Ollama (optional)
 
-1. Install Ollama: Linux `curl -fsSL https://ollama.com/install.sh | sh`; macOS and Windows: the
-   installer from <https://ollama.com/download>.
-2. Make sure it runs (`ollama serve`, or the Ollama app in the menu bar/tray).
-3. Local AI Studio finds it at `http://127.0.0.1:11434`. Another address can be set in
-   **Settings → Ollama**. The Home and Settings pages show whether it is running.
+Install Ollama with `curl -fsSL https://ollama.com/install.sh | sh` on Linux, or with the
+installer from <https://ollama.com/download> on macOS and Windows, and make sure it is
+running (the Ollama app, or `ollama serve`). Local AI Studio finds it at
+`http://127.0.0.1:11434`; another address can be set in **Settings → Ollama**.
 
-### Configure Hugging Face (optional)
+### Hugging Face token (optional)
 
-Most models download without an account. For **gated** models (e.g. Llama, Gemma) or your private
-repositories:
+Most models download without an account. For gated models (Llama and Gemma, for example) or
+your private repositories:
 
-1. On huggingface.co open the model page and accept its license.
-2. Create a *Read* token at <https://huggingface.co/settings/tokens>.
-3. Paste it into **Settings → Hugging Face**. It is checked against the Hub and stored in your
-   operating system's keychain (macOS Keychain, Windows Credential Manager, Secret Service on
-   Linux). If you used `huggingface-cli login` / `hf auth login`, the button *Use my Hugging Face
-   CLI login* imports that token. The `HF_TOKEN` environment variable also works and takes
-   priority.
+1. Open the model on huggingface.co and accept its license.
+2. Create a token with *Read* access at <https://huggingface.co/settings/tokens>.
+3. Paste it into **Settings → Hugging Face**.
 
-### Download a model
+The token is stored in your system's keychain (Keychain on macOS, Credential Manager on
+Windows, Secret Service on Linux), never in a file. If you are logged in with the Hugging Face
+command-line tool, **Use my Hugging Face CLI login** imports that token. The `HF_TOKEN`
+environment variable works too.
 
-1. Open **Discover**. Search Hugging Face (tip: Format → GGUF) or the Ollama library.
-2. Open a model. *Can I run it?* tells you whether it runs here and how much memory it needs.
-3. Pick a version (the recommended one is preselected) and press **Download**.
-4. Watch it on **Downloads** — you can pause, resume, cancel and retry. When it's done it appears
-   in **Library**.
+### Using it from other programs
 
-Good first models: `Qwen/Qwen2.5-1.5B-Instruct-GGUF` (chat, ~1 GB), `openai/whisper-base`
-(speech to text), `stabilityai/sd-turbo` (images), and with Ollama `gemma3` (chat that sees
-images).
+Local AI Studio has an OpenAI-compatible API, so tools that speak to OpenAI can use your local
+models:
 
-### Start inference
+```bash
+curl http://127.0.0.1:8765/v1/models
+curl http://127.0.0.1:8765/v1/chat/completions -H 'Content-Type: application/json' \
+  -d '{"model": "ollama:gemma3", "messages": [{"role": "user", "content": "Hello!"}]}'
+```
 
-- **Chat:** *Chat → New chat*, choose the model, type, press **Send** (Alt+S). The first answer
-  loads the model, which can take a few seconds to a minute.
-- **Speech to text:** *Speech to text*, choose a recording, press **Transcribe**.
-- **Images:** *Create images*, describe the picture, press **Create**.
-- **From other programs:** `POST http://127.0.0.1:8765/v1/chat/completions` with
-  `{"model": "local:<id>" or "ollama:<name>", "messages": [...]}` — model ids are listed by
-  `GET /v1/models`. A reasoning model's thinking is part of `content`, inside
-  `<think>…</think>`, as the model wrote it.
+Model names are `local:<id>` for the built-in engine and `ollama:<name>` for Ollama;
+`/v1/models` lists them. There is also a JSON API under `/api` (`/api/health`,
+`/api/v1/system`, `/api/v1/models`, `/api/v1/downloads`, `/api/v1/chat`).
 
-## 6. Project structure
+## 8. Project structure
 
 ```text
 local-ai-studio/
-├── Cargo.toml / Cargo.lock      Package manifest and locked dependency versions
-├── LICENSE / NOTICE             Apache-2.0 license and attribution notice
-├── THIRD_PARTY_LICENSES.md      Licenses of every bundled crate and font (generated)
-├── README.md                    This file
-├── config/
-│   └── local-ai-studio.example.toml   Annotated configuration with all defaults
-├── assets/                      Compiled into the binary
-│   ├── app.css                  Layout and components (driven by theme tokens)
-│   ├── themes.css               The six themes (tokens + signature rules)
-│   ├── icons.svg, logo.svg      Original icon set and app icon
-│   └── fonts/                   Nine OFL-licensed variable fonts + their licenses
-├── templates/                   Askama HTML templates (server-rendered, no JavaScript)
-│   ├── base.html                Page frame, navigation, theme and shortcut pop-ups
-│   ├── home, discover, hf_model, ollama_model, downloads, library, library_model,
-│   │   chat, create, create_progress, transcribe, transcript, system, settings,
-│   │   licenses, error .html    One template per page
-│   └── partials/message.html    A chat message (also used for streamed answers)
 ├── src/
-│   ├── main.rs                  Command line, logging, start-up and shutdown
-│   ├── lib.rs                   Module tree
-│   ├── app.rs                   Shared application state and background jobs
-│   ├── config.rs                Data folders, settings (TOML), validation
-│   ├── db/                      SQLite storage: schema/migrations, conversations, models,
-│   │                            downloads, catalog index + HTTP cache, generation jobs, key-value
-│   ├── hub.rs                   Hugging Face API client and model compatibility analysis
-│   ├── ollama.rs                Ollama API client and ollama.com library reader
-│   ├── catalog.rs               Offline index building
-│   ├── downloads.rs             Download manager (resume, verify, dedupe, pause/cancel)
-│   ├── library.rs               Inspecting model files and folders, import, delete
-│   ├── inference/               Engines and generation
-│   │   ├── mod.rs               ChatEngine trait, Ollama engine
-│   │   ├── manager.rs           Built-in engine: device choice, loading/unloading, prompts
-│   │   ├── candle_llm.rs        GGUF/safetensors language models on Candle
-│   │   ├── template.rs          Chat templates (Jinja)
-│   │   ├── tokenizer.rs         Hugging Face and SentencePiece tokenizers
-│   │   ├── chat.rs              Chat sessions, live generations, attachments
-│   │   ├── whisper.rs           Speech to text
-│   │   ├── diffusion.rs         Stable Diffusion image generation
-│   │   └── params.rs            Generation parameters
-│   ├── media.rs                 File type detection, images, audio decoding, ffmpeg frames
-│   ├── render.rs                Markdown → safe HTML with code highlighting
-│   ├── math.rs                  TeX → MathML for maths in answers (no JavaScript)
-│   ├── secrets.rs               Hugging Face token in the OS keychain
-│   ├── system.rs                Hardware detection and memory estimates
-│   ├── util.rs                  Paths, formatting, small helpers
-│   ├── error.rs                 Error type with user-facing messages
-│   └── web/                     HTTP layer
-│       ├── mod.rs               Routes, binding, serving
-│       ├── security.rs          Host/Origin checks, network access token, headers
-│       ├── page.rs              Page context, flash messages, error pages
-│       ├── streaming.rs         Streaming HTML for live answers
-│       ├── api.rs               JSON and OpenAI-compatible API
-│       ├── assets.rs            Embedded static files
-│       └── pages/               One handler module per page
-├── tests/                       Integration tests (see Testing)
-│   └── common/mod.rs            Test harness: in-process app, fake Hugging Face and Ollama servers
-├── tools/third_party_licenses.rs   Generates THIRD_PARTY_LICENSES.md
-├── docs/screenshots/            Screenshots used in this README
-├── docs/COMPLETION_REPORT.md    What is done, how it was verified, test results and measurements
-└── .github/workflows/           CI (format, lint, test on Linux/Windows/macOS) and releases
+│   ├── main.rs             Command line, start-up and shutdown
+│   ├── app.rs              Shared state and background jobs
+│   ├── config.rs           Data folders and settings
+│   ├── db/                 SQLite storage: chats, library, downloads, offline index
+│   ├── hub.rs              Hugging Face client and "Can I run it?" analysis
+│   ├── ollama.rs           Ollama client and library reader
+│   ├── downloads.rs        Download manager
+│   ├── library.rs          Model files: inspection, import, delete
+│   ├── inference/          Engines: device choice, LLMs, Whisper, Stable Diffusion
+│   ├── render.rs, math.rs  Markdown and TeX to safe HTML
+│   ├── system.rs           Hardware detection and memory estimates
+│   └── web/                HTTP server, security checks, pages and API
+├── templates/              HTML templates, one per page
+├── assets/                 CSS, themes, icons and fonts (built into the program)
+├── tests/                  Integration tests with fake Hugging Face and Ollama servers
+├── scripts/                build.sh and build.ps1, which pick GPU support automatically
+├── config/                 Example configuration
+├── docs/                   Screenshots and the completion report
+└── tools/                  Generator for THIRD_PARTY_LICENSES.md
 ```
 
-## 7. Implementation details
+## 9. How it works
 
-**Architecture.** One Rust binary contains the web server, the engines, the database and all
-assets. Requests are handled by Axum on Tokio. Pages are rendered on the server with Askama
-templates; the browser receives finished HTML and CSS. State shared by handlers lives in
-`AppState` (settings, database, HTTP client, download manager, inference manager, chat service).
+Local AI Studio is one Rust program that contains the web server, the inference engines, the
+database and all assets. Requests are handled by [Axum](https://github.com/tokio-rs/axum) on
+Tokio, and pages are rendered on the server with [Askama](https://github.com/askama-rs/askama)
+templates, so the browser receives finished HTML and CSS.
 
-**No-JavaScript frontend.** The interface uses only HTML and CSS features:
-forms and redirects (with one-time “flash” messages) for actions, `<details>` for menus, the HTML
-`popover` attribute for dialogs and confirmations, checkbox toggles for the mobile menus, native
-file inputs (which accept drag and drop) for uploads, and `accesskey` shortcuts. Live progress
-uses `<meta refresh>` on pages where nothing is typed (downloads, transcript progress), and a
-small self-refreshing frame for image generation so the form you are typing in never reloads.
-Chat answers are **streamed HTML**: the server keeps the response open and writes the answer as it
-is generated; when it finishes it writes the formatted message and a tiny `<style>` that swaps
-the *Stop* button back to *Send*. Stop is a form posted into a hidden frame so the stream isn't
-interrupted. The Content-Security-Policy forbids all scripts.
+**An interface without JavaScript.** Actions are ordinary forms followed by a redirect.
+Menus are `<details>` elements, dialogs use the HTML `popover` attribute, and progress pages
+refresh themselves. Chat answers are streamed: the server keeps the page open and writes the
+answer into it as it is generated. The Content-Security-Policy forbids scripts entirely.
 
-**Model management.** Hugging Face repositories are analysed from their file list and metadata
-(GGUF headers reported by the Hub, `config.json`, diffusers layouts) into a capability (chat,
-vision, speech, image generation, …), a support level (*runs here*, *runs through Ollama*,
-*download only*) and downloadable variants with memory estimates. Downloaded files are inspected
-again locally (GGUF headers, tokenizer presence, safetensors headers) before a model is marked as
-runnable: a finished download is not assumed to work.
+**Model analysis.** A Hugging Face repository is analysed from its file list and metadata
+(GGUF headers, `config.json`, diffusers layouts) to decide what it can do, which engine can run
+it and how much memory each version needs. After a download the files are inspected again, so
+a finished download isn't simply assumed to work.
 
-**Inference engines.** `ChatEngine` is a small trait (`chat(request, cancel, events)`), with
-streaming events for text, progress phases, completion statistics and errors.
-- *Built-in (Candle)*: GGUF models use Candle's quantized implementations; safetensors models its
-  full-precision ones. Prompts are built with the model's own Jinja chat template, older turns are
-  dropped to fit the context window, and the KV cache is reused when a conversation continues.
-  Models are loaded on first use, kept in an LRU set, and unloaded when idle. Whisper and Stable
-  Diffusion pipelines are cached separately.
-- *Ollama*: requests go to Ollama's `/api/chat` with images as base64; Ollama manages its own
-  memory and GPU use.
+**Engines.** Both engines implement one small trait. The built-in engine runs GGUF models with
+Candle's quantized kernels and safetensors models in full precision. It builds prompts with
+each model's own chat template, drops the oldest messages when a conversation outgrows the
+context window, and reuses its cache when a conversation continues. Models load on first use
+and are unloaded after a configurable idle time. Ollama requests go to its `/api/chat`.
 
-**API structure.** HTML routes under `/`, JSON under `/api` and `/v1`. Unsafe methods must come
-from the app's own pages (Origin/Sec-Fetch-Site/Referer checks); the JSON API can be used by local
-scripts (`curl`) and, in network mode, with a `Bearer` token.
+**Storage.** One SQLite database holds conversations, the library, download jobs (so they
+survive restarts), the offline index, and image and transcription history. Settings are a
+TOML file; uploads and generated images are plain files in the data folder.
 
-**Data persistence.** A single SQLite database (WAL mode, versioned migrations) stores
-conversations and messages, the model library, download jobs (so they survive restarts), the
-catalog index with full-text search, an HTTP cache for catalog pages, and generation/transcription
-history. Settings are a TOML file written atomically. Uploaded files and generated images are
-plain files in the data folder.
+**Security.** The server listens on `127.0.0.1` only, unless you explicitly allow your
+network, and then every other device needs an access token. Host and Origin checks block DNS
+rebinding and cross-site requests. Model output is rendered with raw HTML escaped and only
+`http`, `https` and `mailto` links allowed. File paths from requests are never allowed to leave
+their folders. The Hugging Face token stays in the keychain and is only sent to Hugging Face.
 
-**Security decisions.**
-- Listens on `127.0.0.1` by default; binding any other address requires an explicit opt-in
-  (setting or `--allow-network`), shows warnings in the UI and terminal, and then requires an
-  access token (random, per start) for every request from another device.
-- Host-header checking against DNS rebinding; cross-site request blocking for state changes.
-- CSP without scripts; `nosniff`; frames limited to the app itself; only media files (images,
-  audio, video) are served from the uploads and pictures folders, under a sandboxing CSP.
-- Markdown from models is rendered with raw HTML escaped and only `http`, `https` and `mailto`
-  links allowed.
-- All file paths from requests or the network are joined safely (no `..`, no absolute paths).
-- The Hugging Face token is stored in the OS keychain (or memory), never in files or logs, and is
-  only sent to the configured Hugging Face endpoint.
-- Downloads are verified by checksum before they are moved into the library.
-
-## 8. Testing
+## 10. Testing
 
 ```bash
-cargo test                      # unit + integration tests (no internet, no models needed)
-cargo fmt --all -- --check      # formatting
-cargo clippy --all-targets -- -D warnings
+cargo test                                   # unit and integration tests, no internet or models needed
+cargo fmt --all -- --check                   # formatting
+cargo clippy --all-targets -- -D warnings    # lints
 ```
 
-What is covered:
+| Tests | What they cover |
+|---|---|
+| Unit tests in `src/` | Parsing Hub and Ollama data, compatibility rules, tokenizers and chat templates, memory estimates, settings, Markdown safety, maths |
+| `tests/downloads.rs` | Real downloads from a fake Hugging Face server: checksums, resuming, corrupted files, gated repositories, disk space, pause and cancel, restarts |
+| `tests/chat.rs` | Chats through the real routes with a fake Ollama: streaming, stop, regenerate, edit, export and import, images, the OpenAI-compatible API |
+| `tests/pages.rs` | Every page renders without scripts, and every link, form and button leads somewhere that exists |
+| `tests/security.rs` | Host and Origin checks, the network token, path traversal, HTML injection, size limits |
+| `tests/models.rs`, `tests/discovery.rs`, `tests/server.rs` | Crafted GGUF files, search and the offline index, port conflicts and shutdown |
 
-| Kind | Where | What |
-|---|---|---|
-| Unit | `src/**` (`#[cfg(test)]`) | parsing of Hub/Ollama responses and pages, compatibility rules, GGUF tokenizers and chat templates, mel filters, memory estimates, config validation, markdown safety, paths |
-| Integration | `tests/downloads.rs` | real downloads from a local fake Hugging Face server: verification, resume after a dropped connection, corrupted/missing files, gated/private repos, disk space, pause/resume/cancel, duplicates, concurrency, restart recovery, Ollama pulls |
-| Integration / API | `tests/chat.rs` | chats through the real routes with a fake Ollama server: streaming, stop, continue, regenerate, edit, settings, export/import, images to vision models, refused attachments, Ollama going away, shutdown mid-answer, OpenAI-compatible and native APIs |
-| Frontend (no JS) | `tests/pages.rs` | every page renders without scripts; every link, form, button and label is wired to something that exists; themes switch and persist |
-| Security | `tests/security.rs` | Host and Origin checks, network-mode token, path traversal, HTML injection, token never written to disk, size limits |
-| Compatibility | `tests/models.rs` | crafted GGUF files (supported/unsupported architecture, missing tokenizer, corrupted, truncated, split), import, failing model loads |
-| Discovery | `tests/discovery.rs` | search, pagination, compatibility verdicts, offline index, outages, no internet, Ollama library |
-| Server | `tests/server.rs` | port conflicts, detecting a running copy, real TCP serving, graceful shutdown, CLI refusing network exposure, broken config |
-| Real models (opt-in) | `tests/real_models.rs` | real GGUF chat, real Ollama, real Hub and ollama.com, Whisper, SD-Turbo |
-
-Tests that need real models, a GPU, Ollama or internet access are `#[ignore]`d and controlled by
-environment variables, so CI never depends on them:
+Tests that need real models, a GPU, Ollama or internet access are skipped unless you ask for
+them:
 
 ```bash
-LAS_TEST_GGUF=/path/qwen2.5-0.5b-instruct-q4_k_m.gguf cargo test --release --test real_models -- --ignored builtin
-LAS_TEST_OLLAMA_MODEL=qwen3:0.6b                     cargo test --release --test real_models -- --ignored ollama
-LAS_TEST_NETWORK=1                                   cargo test --release --test real_models -- --ignored network
-LAS_TEST_NETWORK=1 LAS_TEST_AUDIO=/path/speech.wav   cargo test --release --test real_models -- --ignored whisper
-LAS_TEST_NETWORK=1 LAS_TEST_HEAVY=1                  cargo test --release --test real_models -- --ignored image
+LAS_TEST_GGUF=/path/to/model.gguf  cargo test --release --test real_models -- --ignored builtin
+LAS_TEST_OLLAMA_MODEL=qwen3:0.6b   cargo test --release --test real_models -- --ignored ollama
+LAS_TEST_NETWORK=1                 cargo test --release --test real_models -- --ignored network
 ```
 
-The Ollama tests use `http://127.0.0.1:11434`; set `LAS_TEST_OLLAMA_URL` to use another address.
-Which of these were run, and their results, is recorded in
-[`docs/COMPLETION_REPORT.md`](docs/COMPLETION_REPORT.md).
+`tests/real_models.rs` lists the others (Whisper and image generation). The results of the
+last full run are in [`docs/COMPLETION_REPORT.md`](docs/COMPLETION_REPORT.md).
 
-GitHub Actions (`.github/workflows/ci.yml`) checks formatting and Clippy, builds and runs the
-tests on Ubuntu, Windows, macOS (Apple Silicon) and macOS (Intel), checks the minimum Rust version
-and compiles the Metal feature on macOS. Tagged versions are built for all four targets by
-`release.yml`.
+GitHub Actions checks formatting and lints, then builds and tests on Ubuntu, Windows, macOS on
+Apple Silicon (where it also checks that Metal is built in) and macOS on Intel. Tagged versions
+are built for all four by the release workflow.
 
-**Compatibility matrix**
+| Platform | Automated tests | Built-in engine | GPU in the built-in engine | Ollama |
+|---|---|---|---|---|
+| Linux x86_64 | Ubuntu 24.04 laptop and CI | Tested | NVIDIA with a CUDA build | Tested, on the GPU |
+| Windows x64 | CI | Expected to work | NVIDIA with a CUDA build | Expected to work |
+| macOS, Apple Silicon | CI | Expected to work | Metal, built in | Expected to work |
+| macOS, Intel | CI | Expected to work | Processor only | Expected to work |
 
-| Platform | Build & automated tests | Built-in engine (CPU) | Built-in engine (GPU) | Ollama | Keychain |
-|---|---|---|---|---|---|
-| Linux x86_64 | ✅ tested: Ubuntu 24.04 (Intel Core Ultra 9 185H, RTX 4060 Laptop) and a Linux container | ✅ tested | NVIDIA with `--features cuda` (not tested by the authors) | ✅ tested, GPU | Secret Service (GNOME Keyring, KWallet); otherwise session-only |
-| Windows x64 | built and tested in CI | expected ✅ | NVIDIA with `--features cuda` (not tested) | expected ✅ | Credential Manager |
-| macOS Apple Silicon | built and tested in CI | expected ✅ | Metal with `--features metal` (not tested) | expected ✅ | Keychain |
-| macOS Intel | built and tested in CI | expected ✅ | — | expected ✅ | Keychain |
-| AMD / Intel GPUs | — | CPU only | not supported by Candle | where Ollama supports them | — |
+The program has so far been used day to day only on Linux, and the GPU paths of the built-in
+engine have not yet been run on real hardware by the authors. Reports from Windows and Mac
+users are very welcome.
 
-“Built and tested in CI” means GitHub Actions builds these platforms and runs the automated tests
-on every push; the Actions tab shows the latest results. The first run found one Windows-only bug
-(the free-space check before downloads), which is fixed. The app has not yet been used
-interactively on Windows or macOS.
-
-Known limitations of the tests: GPU code paths can't run in CI; the ollama.com reader is tested
-against stored HTML (the fake site also imitates ollama.com answering JSON-accepting clients with
-a bare tag list) plus an opt-in live test, because the site has no API; generation quality isn't
-measured, only correctness of the plumbing and determinism with a fixed seed.
-
-## 9. Troubleshooting
+## 11. Troubleshooting
 
 | Problem | What to do |
 |---|---|
-| *“port 8765 … is already used”* | Another program uses the port. Start with `--port 9000`, or change it in Settings → Server. If Local AI Studio is already running, a second start just opens the first one. |
-| The browser doesn't open | Open <http://127.0.0.1:8765> yourself (the address is printed in the terminal), or check `open_browser` in Settings. |
-| *“Blocked: this request used an unexpected host name”* | Use `http://127.0.0.1:8765` or `http://localhost:8765`, not a custom host name (this protects against DNS-rebinding attacks). |
-| Ollama shows *Not running* | Start Ollama (`ollama serve` or the Ollama app). If it runs elsewhere, set its address in Settings → Ollama. |
-| A model says *Can't run* | Its page lists the reason (unsupported architecture or quantisation, missing tokenizer, split file…). Most such GGUF files run through Ollama: use *Get it with Ollama instead*. |
-| Gated model: *403 / gated* | Accept the license on huggingface.co, then add a token in Settings → Hugging Face. |
-| Downloads stop or fail | Each file is retried automatically (up to four attempts, resuming where it stopped; a download that stalls for 60 s is retried). After that press **Retry**. Check free disk space and your connection. Pausing and resuming keeps what was downloaded. |
-| Answers are slow | The default build runs on the CPU. Use a smaller or more quantised model (Q4_K_M), close other programs, or run the model through Ollama (which uses your GPU), or build with `--features cuda`/`metal`. |
-| *“needs about X but this computer has Y”* | The model is too big for your memory. Choose a smaller size or quantisation. Estimates are approximate. |
-| The token can't be saved in the keychain (Linux) | No Secret Service is running (common on minimal or headless systems). The token then lasts for the session only; set `HF_TOKEN` in your environment to keep it. |
-| Video or video transcription fails | Install ffmpeg (Settings → Media shows whether it was found, or set its path there). |
-| Windows SmartScreen / macOS “unidentified developer” | The release binaries aren't code-signed. Windows: *More info → Run anyway*. macOS: right-click → *Open*, or `xattr -d com.apple.quarantine local-ai-studio`. |
-| Something else | Settings → Logging → *Open logs folder*; raise the level to `debug`, reproduce, and look at the newest log. Settings → Data & cache can clear caches or reset settings without touching models or chats. |
+| "port 8765 is already used" | Another program uses the port. Start with `--port 9000` or change it in Settings → Server. If Local AI Studio is already running, a second start just opens the first one. |
+| The browser doesn't open | Open <http://127.0.0.1:8765> yourself; the address is also printed in the terminal. |
+| "Blocked: this request used an unexpected host name" | Use `http://127.0.0.1:8765` or `http://localhost:8765`. Other host names are blocked to protect against DNS-rebinding attacks. |
+| Ollama shows "Not running" | Start Ollama (the app, or `ollama serve`). If it runs on another address, set it in Settings → Ollama. |
+| A model says "Can't run" | The model page gives the reason (unsupported architecture or quantisation, missing tokenizer, split file). Most such GGUF files run through Ollama: use **Get it with Ollama instead**. |
+| A gated model fails with 403 | Accept the license on huggingface.co, then add a token in Settings → Hugging Face. |
+| Downloads stop or fail | Each file is tried up to four times and resumes where it stopped. After that, press **Retry**. Check your free disk space and connection. |
+| Answers are slow | Choose a smaller or more quantised model (Q4_K_M), close other programs, or use the GPU (see [GPU acceleration](#6-gpu-acceleration)). |
+| My NVIDIA card isn't used | The Linux and Windows releases run the built-in engine on the processor. Install the CUDA toolkit and build with `scripts/build.sh`; the System page shows whether CUDA is available. Ollama uses the card either way. |
+| The CUDA build fails with "unsupported GNU version" | Your CUDA toolkit is older than your system's compiler. Install a newer toolkit, or point it at an older compiler: `NVCC_CCBIN=g++-12 ./scripts/build.sh`. |
+| "error while loading shared libraries: libcublas…" | The CUDA libraries aren't on the library path, for example `export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH`. |
+| "needs about X but this computer has Y" | The model is too big for your memory. Choose a smaller size or quantisation. |
+| The token can't be saved in the keychain (Linux) | No Secret Service is running, which is common on minimal systems. The token then lasts for the session only; set `HF_TOKEN` to keep it. |
+| Videos or video transcription fail | Install ffmpeg. Settings → Media shows whether it was found, and lets you set its path. |
+| Something else | Settings → Logging → **Open logs folder**. Raise the level to `debug`, try again and look at the newest log. Settings → Data & cache can clear caches or reset settings without touching models or chats. |
 
-## 10. License
+## 12. License
 
-Local AI Studio is licensed under the **Apache License 2.0** (see [`LICENSE`](LICENSE) and
-[`NOTICE`](NOTICE)).
+Local AI Studio is licensed under the [Apache License 2.0](LICENSE) (see also
+[`NOTICE`](NOTICE)). It is a permissive license like MIT, and it also includes an explicit
+patent grant, which matters for software in the AI space. It is the license of Candle,
+Tokenizers and much of the Rust ecosystem this project builds on.
 
-Why Apache-2.0 rather than MIT: both are permissive and allow commercial use, modification and
-redistribution. Apache-2.0 additionally grants an explicit **patent license** from contributors
-and protects users against patent claims — useful for software in the AI space — and it is the
-license used by Candle, Tokenizers and much of the Rust ecosystem this project builds on.
+The Rust libraries compiled into the program keep their own licenses, listed in
+[`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md) and in the app under Settings → About.
+Almost all are permissive (MIT, Apache-2.0, BSD, ISC and similar). A few use MPL-2.0 (the
+Symphonia audio decoders and the CSS-selector crates behind `scraper`), a file-level copyleft
+that is satisfied because their unmodified source is available on crates.io. Nothing in the
+dependency tree is GPL. The bundled fonts use the SIL Open Font License.
 
-Third-party components keep their own licenses: the Rust crates compiled into the program are
-listed with their licenses in [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md) (also shown in
-the app under Settings → About → Open-source licenses). Of the 536 crates, almost all are under
-permissive licenses (MIT, Apache-2.0, BSD, ISC, Zlib, Unicode-3.0, 0BSD, BSL-1.0, CC0 — where a
-crate offers a choice, a permissive option such as MIT is used). Two kinds need a note:
+AI models are not part of this project. The models you download belong to their publishers,
+and their licenses may restrict commercial use or require attribution. Checking and following
+them is up to you; Local AI Studio shows each model's license where the publisher provides one.
 
-- **MPL-2.0** (Symphonia audio decoders, the CSS-selector crates used by `scraper`, `option-ext`):
-  weak, file-level copyleft. Local AI Studio doesn't modify these files; their source code is
-  available from crates.io, which satisfies MPL-2.0 for distributing the compiled program, and
-  combining them with Apache-2.0 code is explicitly allowed by MPL-2.0.
-- **CDLA-Permissive-2.0** (`webpki-roots`, a list of root certificates): a permissive data license.
+## 13. Future improvements
 
-Nothing in the dependency tree is GPL or otherwise strong copyleft, so the whole program can be
-distributed under Apache-2.0. The bundled fonts use the SIL Open Font License 1.1, which allows
-bundling them with software.
-
-**AI models are not part of this project.** Models you download are owned and licensed by their
-publishers (for example Meta, Google, Alibaba, Microsoft, Stability AI, OpenAI). Their licenses
-may restrict commercial use or require attribution; checking and following them is your
-responsibility. Local AI Studio shows each model's license where the publisher provides one.
-
-## 11. Future improvements
-
-- **Vision in the built-in engine** (e.g. LLaVA / Qwen2-VL style models in Candle), so image
-  understanding doesn't require Ollama.
-- **Text-to-speech** (e.g. Kokoro or Parler-TTS ports to Candle) for spoken answers.
-- **Video generation** once a Rust-native implementation of a practical model exists.
-- **llama.cpp integration** (through a maintained Rust binding) for IQ quantisations and split
-  GGUF files without Ollama.
-- **Retrieval over your documents** (embeddings + local vector index) and tool calling.
-- **HTTPS for network mode** and user accounts for shared machines.
-- **Installers** (MSI, DMG, AppImage/Flatpak) with code signing, and automatic update checks.
-- **Smarter memory planning**: partial GPU offload and KV-cache quantisation in the built-in engine.
-
-## 12. Acknowledgements
-
-Local AI Studio stands on the shoulders of many open-source projects, including:
-[Candle](https://github.com/huggingface/candle) and
-[Tokenizers](https://github.com/huggingface/tokenizers) by Hugging Face;
-[Ollama](https://github.com/ollama/ollama) and the [llama.cpp](https://github.com/ggml-org/llama.cpp)
-GGUF format; [Tokio](https://tokio.rs), [Axum](https://github.com/tokio-rs/axum),
-[Hyper](https://hyper.rs) and [Tower](https://github.com/tower-rs/tower);
-[Askama](https://github.com/askama-rs/askama); [SQLite](https://sqlite.org) via
-[rusqlite](https://github.com/rusqlite/rusqlite); [reqwest](https://github.com/seanmonstar/reqwest)
-and [rustls](https://github.com/rustls/rustls); [MiniJinja](https://github.com/mitsuhiko/minijinja);
-[pulldown-cmark](https://github.com/pulldown-cmark/pulldown-cmark);
-[Syntect](https://github.com/trishume/syntect); [Symphonia](https://github.com/pdeljanov/Symphonia);
-[image](https://github.com/image-rs/image); [sysinfo](https://github.com/GuillaumeGomez/sysinfo);
-[keyring-rs](https://github.com/hwchen/keyring-rs); [scraper](https://github.com/causal-agent/scraper);
-[clap](https://github.com/clap-rs/clap); [Serde](https://serde.rs); and the
-[Hugging Face Hub](https://huggingface.co) API.
-
-Fonts: Inter, Manrope, IBM Plex Sans, Space Grotesk, Orbitron, Fraunces, Nunito Sans,
-Plus Jakarta Sans and JetBrains Mono — all under the SIL Open Font License.
-
-Thanks to the people who train and openly publish the models that make local AI possible.
+- Vision models in the built-in engine, so image questions don't need Ollama.
+- Text-to-speech for spoken answers.
+- Video generation, once a practical model exists in Rust.
+- Support for IQ quantisations and split GGUF files without Ollama.
+- Questions over your own documents (local embeddings and search), and tool calling.
+- HTTPS for network mode, and user accounts for shared computers.
+- Installers (MSI, DMG, AppImage or Flatpak) with code signing, and update checks.
+- Running part of a model on the GPU when it doesn't fit completely.

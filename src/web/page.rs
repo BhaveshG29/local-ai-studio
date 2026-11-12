@@ -136,18 +136,23 @@ pub fn redirect(to: &str) -> Response {
     Redirect::to(to).into_response()
 }
 
+/// Expires the flash cookie once a page has shown its message, so it isn't shown again.
+pub fn clear_flash(ctx: &PageCtx, r: &mut Response) {
+    if ctx.flash.is_some() {
+        r.headers_mut().append(
+            header::SET_COOKIE,
+            HeaderValue::from_static("las_flash=; Path=/; Max-Age=0; SameSite=Strict; HttpOnly"),
+        );
+    }
+}
+
 /// Renders a template; clears the flash cookie when the page displayed it.
 pub fn render<T: Template>(ctx: &PageCtx, t: &T) -> Response {
     match t.render() {
         Ok(html) => {
             let mut r = Html(html).into_response();
             r.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
-            if ctx.flash.is_some() {
-                r.headers_mut().append(
-                    header::SET_COOKIE,
-                    HeaderValue::from_static("las_flash=; Path=/; Max-Age=0; SameSite=Strict; HttpOnly"),
-                );
-            }
+            clear_flash(ctx, &mut r);
             r
         }
         Err(e) => {

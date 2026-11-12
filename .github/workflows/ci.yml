@@ -25,6 +25,8 @@ jobs:
         with:
           components: rustfmt
       - run: cargo fmt --all -- --check
+      - name: Check the build script
+        run: bash -n scripts/build.sh
 
   clippy:
     name: Clippy
@@ -57,7 +59,19 @@ jobs:
         run: cargo test --locked --all-targets --no-fail-fast
       - name: Start-up smoke test
         shell: bash
-        run: cargo run --locked -- --system-info
+        run: cargo run --locked -- --system-info > system-info.json && cat system-info.json
+      - name: Apple Silicon builds include Metal
+        if: runner.os == 'macOS' && runner.arch == 'ARM64'
+        shell: bash
+        run: |
+          grep -q '"metal_compiled": true' system-info.json
+      - name: Check the Windows build script
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("$PWD/scripts/build.ps1", [ref]$null, [ref]$errors) | Out-Null
+          if ($errors) { $errors | ForEach-Object { Write-Host $_ }; exit 1 }
 
   msrv:
     name: Minimum Rust version
@@ -78,9 +92,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --locked --all-targets
 
-  metal:
-    name: Apple Metal build
-    runs-on: macos-latest
+  # Apple Silicon builds include Metal by default (tested above). On Intel Macs it's opt-in.
+  metal-intel:
+    name: Metal on Intel Macs (opt-in)
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

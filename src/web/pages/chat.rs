@@ -88,7 +88,6 @@ pub struct ChatPage {
     pub whisper_available: bool,
     pub ffmpeg_available: bool,
     pub draft: String,
-    pub default_system_prompt: String,
     pub live_marker: &'static str,
 }
 
@@ -218,9 +217,7 @@ async fn build_page(
     let model_missing = selected.is_some() && selected_choice.is_none();
     let engine_name = match selected.as_deref().and_then(ModelRef::parse) {
         Some(ModelRef::Ollama(_)) => "Ollama".to_string(),
-        Some(ModelRef::Local(_)) => {
-            format!("Built-in engine ({})", state.inference.device().map(|d| d.1).unwrap_or_else(|_| "CPU".into()))
-        }
+        Some(ModelRef::Local(id)) => format!("Built-in engine ({})", state.inference.label_for(&id)),
         None => String::new(),
     };
     let (usage, title, system_prompt, params) = match conv {
@@ -284,7 +281,6 @@ async fn build_page(
         whisper_available,
         ffmpeg_available: crate::media::ffmpeg_path(&settings).is_some(),
         draft,
-        default_system_prompt: settings.generation.system_prompt.clone(),
         live_marker: LIVE_MARKER,
     };
     Ok((ctx, page))
@@ -339,7 +335,10 @@ pub async fn view(State(state): State<SharedState>, headers: HeaderMap, Path(id)
                 }
                 MessagePartial { m: &view, conv_id: &conv_id }.render().unwrap_or_default()
             });
-            Ok(streaming::stream_page(html, live, model_label, final_html, state.shutdown.clone()))
+            // Streamed pages bypass `render`, which would expire the flash message it shows.
+            let mut r = streaming::stream_page(html, live, model_label, final_html, state.shutdown.clone());
+            crate::web::page::clear_flash(&ctx, &mut r);
+            Ok(r)
         }
         _ => Ok(render(&ctx, &page)),
     }
@@ -687,10 +686,29 @@ pub async fn stop(State(state): State<SharedState>, headers: HeaderMap, Path(id)
     }
 }
 
+/// Checks what `ChatService::start` would refuse before it generates anything. Regenerate
+/// and Edit delete messages first, so a refusal afterwards would lose them for nothing.
+async fn check_can_answer(state: &SharedState, id: &str) -> AppResult<()> {
+    let i = id.to_string();
+    let conv = state
+        .db
+        .call(move |c| convdb::get_conversation(c, &i))
+        .await?
+        .ok_or_else(|| AppError::not_found("This conversation no longer exists."))?;
+    match conv.model_ref.as_deref().map(ModelRef::parse) {
+        None => Err(AppError::bad_request("Pick a model for this chat first, in Chat settings.")),
+        Some(None) => Err(AppError::bad_request("The selected model is invalid; pick another one in Chat settings.")),
+        Some(Some(_)) => Ok(()),
+    }
+}
+
 pub async fn regenerate(State(state): State<SharedState>, Path(id): Path<String>) -> Response {
     let back = format!("/chat/{id}");
     if state.chat.is_generating(&id) {
         return redirect_flash(&back, "error", "Wait for the current answer to finish, or press Stop.");
+    }
+    if let Err(e) = check_can_answer(&state, &id).await {
+        return redirect_flash(&back, "error", &e.user_message());
     }
     let i = id.clone();
     let res = state
@@ -739,6 +757,9 @@ pub async fn edit_message(
     }
     if state.chat.is_generating(&id) {
         return redirect_flash(&back, "error", "Wait for the current answer to finish, or press Stop.");
+    }
+    if let Err(e) = check_can_answer(&state, &id).await {
+        return redirect_flash(&back, "error", &e.user_message());
     }
     let (i, m, text) = (id.clone(), mid.clone(), f.text.clone());
     let res = state

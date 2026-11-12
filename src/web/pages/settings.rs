@@ -71,8 +71,6 @@ pub struct SettingsPage {
     pub server_url: String,
     pub access_token: String,
     pub show_token: bool,
-    pub cuda_build: bool,
-    pub metal_build: bool,
     pub seed_text: String,
     pub threads_text: String,
     /// The folder overrides as typed (empty = default location).
@@ -153,7 +151,7 @@ pub async fn page(
         ollama_steps: steps,
         backends: select(
             &[
-                (BackendPreference::Auto, "auto", "Automatic"),
+                (BackendPreference::Auto, "auto", "Automatic (the one that can use the graphics card)"),
                 (BackendPreference::Builtin, "builtin", "Built-in engine first"),
                 (BackendPreference::Ollama, "ollama", "Ollama first"),
             ],
@@ -168,7 +166,12 @@ pub async fn page(
             ],
             s.inference.acceleration,
         ),
-        accel_notes: vec![accel.cuda_detail.clone(), accel.metal_detail.clone()],
+        // Only the kind of GPU this platform can have: Metal on macOS, CUDA elsewhere.
+        accel_notes: vec![if cfg!(target_os = "macos") {
+            accel.metal_detail.clone()
+        } else {
+            accel.cuda_detail.clone()
+        }],
         log_levels: LOG_LEVELS
             .iter()
             .map(|l| SelectOpt { value: (*l).into(), label: (*l).into(), selected: *l == s.logging.level })
@@ -194,8 +197,6 @@ pub async fn page(
         server_url: state.server.url(),
         access_token: state.server.access_token.clone(),
         show_token: peer_is_local && state.server.addr().map(|a| !a.ip().is_loopback()).unwrap_or(false),
-        cuda_build: accel.cuda_compiled,
-        metal_build: accel.metal_compiled,
         seed_text: s.generation.seed.map(|v| v.to_string()).unwrap_or_default(),
         threads_text: s.inference.threads.map(|v| v.to_string()).unwrap_or_default(),
         models_dir_set: path_text(&s.storage.models_dir),
@@ -260,8 +261,9 @@ fn apply_section(s: &mut Settings, section: &str, f: &HashMap<String, String>) -
         }
         "huggingface" => {
             let ep = f.get("endpoint").map(|e| e.trim().to_string()).unwrap_or_default();
-            if !ep.is_empty() && !(ep.starts_with("https://") || ep.starts_with("http://")) {
-                return Err("The endpoint must start with https://".into());
+            let valid = url::Url::parse(&ep).is_ok_and(|u| matches!(u.scheme(), "http" | "https") && u.has_host());
+            if !ep.is_empty() && !valid {
+                return Err("The endpoint must be a web address such as https://huggingface.co".into());
             }
             s.huggingface.endpoint = if ep.is_empty() { "https://huggingface.co".into() } else { ep };
             s.huggingface.show_gated = checked("show_gated");
@@ -391,7 +393,9 @@ pub async fn save(
     Path(section): Path<String>,
     Form(f): Form<HashMap<String, String>>,
 ) -> Response {
-    let back = format!("/settings#{section}");
+    // The Appearance section is saved as "ui".
+    let anchor = if section == "ui" { "appearance" } else { section.as_str() };
+    let back = format!("/settings#{anchor}");
     let mut next = state.settings();
     match apply_section(&mut next, &section, &f) {
         Ok(msg) => match state.update_settings(|s| *s = next) {
@@ -473,15 +477,18 @@ pub async fn data_action(State(state): State<SharedState>, Path(action): Path<St
             Err(e) => redirect_flash(back, "error", &format!("{e:#}")),
         },
         "clear-uploads" => {
-            let referenced = state.db.call(crate::db::conversations::referenced_uploads).await.unwrap_or_default();
-            let transcripts: Vec<String> = state
-                .db
-                .call(|c| crate::db::jobs::list_transcriptions(c, 100_000))
-                .await
-                .unwrap_or_default()
-                .into_iter()
-                .map(|t| t.stored_file)
-                .collect();
+            // Files still used by a chat or a transcript are kept. If either list can't be read,
+            // nothing is deleted: an empty list would mean "delete everything".
+            let lists = async {
+                let referenced = state.db.call(crate::db::conversations::referenced_uploads).await?;
+                let transcripts = state.db.call(|c| crate::db::jobs::list_transcriptions(c, 100_000)).await?;
+                Ok::<_, AppError>((referenced, transcripts))
+            };
+            let (referenced, transcripts) = match lists.await {
+                Ok(l) => l,
+                Err(e) => return redirect_flash(back, "error", &format!("Nothing was deleted: {}", e.user_message())),
+            };
+            let transcripts: Vec<String> = transcripts.into_iter().map(|t| t.stored_file).collect();
             let keep: std::collections::HashSet<String> = referenced.into_iter().chain(transcripts).collect();
             let base = state.paths.uploads_dir.clone();
             let removed = tokio::task::spawn_blocking(move || {

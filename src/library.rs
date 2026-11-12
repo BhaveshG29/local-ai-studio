@@ -366,10 +366,8 @@ pub async fn register_hf_download(db: &Db, row: &DownloadRow, model_dir: &Path) 
         let primary = primary.clone();
         db.call(move |c| db::models::find_by_repo(c, &repo, primary.as_deref())).await?
     };
-    let size: u64 = match primary.as_deref() {
-        Some(f) => std::fs::metadata(dir.join(f)).map(|m| m.len()).unwrap_or(0),
-        None => row.files.iter().map(|f| f.size).sum(),
-    };
+    // All files of the download: one file for most GGUF models, every part of a split one.
+    let size: u64 = row.files.iter().map(|f| f.size).sum();
     let display_name = row.options.display_name.clone().unwrap_or_else(|| {
         let base = repo.rsplit('/').next().unwrap_or(&repo).to_string();
         match &analysis.quantization {
@@ -465,8 +463,11 @@ pub async fn reanalyze(db: &Db, id: &str) -> Result<ModelRow> {
     })
     .await?;
     m.kind = kind_label(m.analysis.capability).into();
+    m.format = m.analysis.format.clone();
     m.architecture = m.analysis.architecture.clone();
     m.quantization = m.analysis.quantization.clone();
+    m.parameters = m.analysis.parameters.map(|p| p as i64);
+    m.context_length = m.analysis.context_length.map(|c| c as i64);
     let mm = m.clone();
     db.call(move |c| db::models::upsert(c, &mm)).await?;
     Ok(m)
@@ -487,18 +488,34 @@ pub async fn delete_model(db: &Db, models_dir: &Path, id: &str, delete_files: bo
     if m.source == "huggingface" && inside {
         match &m.primary_file {
             Some(f) => {
-                let file = path.join(f);
-                let _ = tokio::fs::remove_file(&file).await;
-                // Remove the folder if nothing else is left in it.
+                // Other versions of the same repository share the folder.
                 let others = db
                     .call({
                         let p = m.path.clone();
                         let id = m.id.clone();
-                        move |c| Ok(db::models::list(c)?.into_iter().any(|x| x.path == p && x.id != id))
+                        move |c| {
+                            Ok(db::models::list(c)?
+                                .into_iter()
+                                .filter(|x| x.path == p && x.id != id)
+                                .collect::<Vec<_>>())
+                        }
                     })
                     .await?;
-                if !others {
+                if others.is_empty() {
                     let _ = tokio::fs::remove_dir_all(&path).await;
+                } else {
+                    // Every file of this model (all parts of a split GGUF), except files
+                    // another model in the folder uses too.
+                    let shared: std::collections::HashSet<&str> = others
+                        .iter()
+                        .flat_map(|o| o.files.iter().map(|x| x.path.as_str()).chain(o.primary_file.as_deref()))
+                        .collect();
+                    let own = m.files.iter().map(|x| x.path.as_str()).chain(std::iter::once(f.as_str()));
+                    for rel in own.filter(|rel| !shared.contains(rel)) {
+                        if let Some(file) = crate::util::safe_join(&path, rel) {
+                            let _ = tokio::fs::remove_file(&file).await;
+                        }
+                    }
                 }
             }
             None => {

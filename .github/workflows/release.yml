@@ -29,7 +29,11 @@ jobs:
         with:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
-      - name: Build (CPU build; see the README for CUDA and Metal builds)
+      # Apple Silicon builds use the GPU through Metal. Linux and Windows builds run the
+      # built-in engine on the CPU: CUDA kernels are compiled for one card generation and
+      # need the CUDA libraries, so GPU builds are made on the user's computer
+      # (scripts/build.sh, scripts/build.ps1).
+      - name: Build
         run: cargo build --locked --release --target ${{ matrix.target }}
       - name: Package
         shell: bash

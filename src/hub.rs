@@ -305,7 +305,7 @@ pub fn parse_next_cursor(link: &str) -> Option<String> {
         }
         let start = part.find('<')? + 1;
         let end = part.find('>')?;
-        let url = url::Url::parse(&part[start..end]).ok()?;
+        let url = url::Url::parse(part.get(start..end)?).ok()?;
         return url.query_pairs().find(|(k, _)| k == "cursor").map(|(_, v)| v.to_string());
     }
     None
@@ -414,7 +414,10 @@ impl HubClient {
     }
 
     fn search_url(&self, q: &HubSearch) -> String {
-        let mut url = url::Url::parse(&format!("{}/api/models", self.endpoint())).expect("endpoint is a valid URL");
+        // Settings only keep valid endpoints (see `Settings::normalize`); the fallback is never
+        // expected, but a bad address must not take the page down.
+        let mut url = url::Url::parse(&format!("{}/api/models", self.endpoint()))
+            .unwrap_or_else(|_| url::Url::parse("https://huggingface.co/api/models").expect("constant URL"));
         {
             let mut p = url.query_pairs_mut();
             if !q.text.trim().is_empty() {
@@ -755,15 +758,17 @@ pub fn analyze_repo(info: &HubModelInfo) -> HubCompat {
     if pipeline == "automatic-speech-recognition" {
         return unsupported(info, Capability::Transcription, "Only Whisper models are supported for speech to text.");
     }
-    if !gguf_files.is_empty() {
-        return analyze_gguf(info, &gguf_files);
-    }
+    // Before the GGUF check: embedding models are published as GGUF too, and their
+    // architecture (qwen3, llama, …) would otherwise make them look like chat models.
     if pipeline == "feature-extraction" || pipeline == "sentence-similarity" {
         return unsupported(
             info,
             Capability::Embedding,
             "Embedding models are not used by Local AI Studio's chat yet.",
         );
+    }
+    if !gguf_files.is_empty() {
+        return analyze_gguf(info, &gguf_files);
     }
     let has_safetensors = info.siblings.iter().any(|s| s.rfilename.ends_with(".safetensors"));
     if has_safetensors && matches!(pipeline.as_str(), "text-generation" | "conversational" | "") {
@@ -911,12 +916,32 @@ fn analyze_gguf(info: &HubModelInfo, files: &[&HubSibling]) -> HubCompat {
     }
 }
 
+/// `model-00001-of-00004.safetensors`: one shard of a Transformers checkpoint.
+fn is_weight_shard(name: &str) -> bool {
+    let Some(rest) = name.strip_prefix("model-").and_then(|r| r.strip_suffix(".safetensors")) else {
+        return false;
+    };
+    rest.split_once("-of-").is_some_and(|(a, b)| {
+        !a.is_empty() && !b.is_empty() && (a.chars().chain(b.chars())).all(|c| c.is_ascii_digit())
+    })
+}
+
 fn analyze_safetensors_llm(info: &HubModelInfo) -> HubCompat {
     let model_type = info.model_type().unwrap_or_default();
     let supported = BUILTIN_SAFETENSORS_TYPES.contains(&model_type.as_str());
     let has_tokenizer = info.has_file("tokenizer.json");
-    let weight_files: Vec<&HubSibling> =
+    let top_level: Vec<&HubSibling> =
         info.siblings.iter().filter(|s| s.rfilename.ends_with(".safetensors") && !s.rfilename.contains('/')).collect();
+    // Only the Transformers-format weights, which the loader reads: some repositories also
+    // carry the same weights in another layout (Mistral's `consolidated.safetensors`).
+    let shards: Vec<&HubSibling> = top_level.iter().copied().filter(|s| is_weight_shard(&s.rfilename)).collect();
+    let weight_files: Vec<&HubSibling> = if !shards.is_empty() {
+        shards
+    } else if let Some(single) = top_level.iter().copied().find(|s| s.rfilename == "model.safetensors") {
+        vec![single]
+    } else {
+        top_level
+    };
     let mut files: Vec<String> = weight_files.iter().map(|s| s.rfilename.clone()).collect();
     for extra in [
         "config.json",
@@ -1173,6 +1198,50 @@ mod tests {
         let link = "<https://huggingface.co/api/models?search=q&limit=3&cursor=eyJ0ZXN0IjoxfQ%3D%3D>; rel=\"next\"";
         assert_eq!(parse_next_cursor(link).as_deref(), Some("eyJ0ZXN0IjoxfQ=="));
         assert_eq!(parse_next_cursor("<https://x/y>; rel=\"prev\""), None);
+        // Malformed headers are ignored, not a crash.
+        assert_eq!(parse_next_cursor(">https://x/y?cursor=a<; rel=\"next\""), None);
+    }
+
+    #[test]
+    fn embedding_gguf_repos_are_not_chat_models() {
+        let mut info = gguf_info("qwen3", &[("Qwen3-Embedding-0.6B-Q8_0.gguf", 600)]);
+        info.summary.pipeline_tag = Some("feature-extraction".into());
+        let c = analyze_repo(&info);
+        assert_eq!(c.capability, Capability::Embedding);
+        assert_eq!(c.support, Support::DownloadOnly);
+        assert!(c.variants.iter().all(|v| !v.builtin));
+    }
+
+    #[test]
+    fn safetensors_variants_skip_duplicate_weight_layouts() {
+        assert!(is_weight_shard("model-00001-of-00003.safetensors"));
+        assert!(!is_weight_shard("consolidated.safetensors"));
+        assert!(!is_weight_shard("model-x-of-00003.safetensors"));
+        let names = [
+            "consolidated.safetensors",
+            "model-00001-of-00002.safetensors",
+            "model-00002-of-00002.safetensors",
+            "model.safetensors.index.json",
+            "config.json",
+            "tokenizer.json",
+        ];
+        let info = HubModelInfo {
+            summary: HubModelSummary {
+                id: "mistralai/Mistral-7B-Instruct-v0.3".into(),
+                pipeline_tag: Some("text-generation".into()),
+                ..Default::default()
+            },
+            siblings: names
+                .iter()
+                .map(|n| HubSibling { rfilename: (*n).into(), size: Some(1000), ..Default::default() })
+                .collect(),
+            config: Some(serde_json::json!({ "model_type": "mistral" })),
+            ..Default::default()
+        };
+        let c = analyze_repo(&info);
+        let files = &c.variants[0].files;
+        assert!(files.iter().any(|f| f == "model-00002-of-00002.safetensors"), "{files:?}");
+        assert!(!files.iter().any(|f| f == "consolidated.safetensors"), "{files:?}");
     }
 
     #[test]

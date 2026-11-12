@@ -182,7 +182,7 @@ pub async fn page(State(state): State<SharedState>, headers: HeaderMap, Query(q)
         pictures_dir: directories::UserDirs::new()
             .and_then(|u| u.picture_dir().map(|p| p.to_string_lossy().to_string()))
             .unwrap_or_default(),
-        engine_label: state.inference.device().map(|d| d.1).unwrap_or_else(|e| e),
+        engine_label: state.inference.device_label().unwrap_or_else(|e| e),
     };
     render(&ctx, &page)
 }

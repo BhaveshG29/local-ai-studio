@@ -111,6 +111,20 @@ pub async fn refresh_index(
     pages_per_category: usize,
 ) {
     status.update(|p| *p = IndexProgress { running: true, stage: "Starting".into(), ..Default::default() });
+    // If the crawl ends any other way than below (a panic in a page parser), the index must
+    // not stay "being updated" until the app restarts.
+    struct Finish(IndexStatus);
+    impl Drop for Finish {
+        fn drop(&mut self) {
+            self.0.update(|p| {
+                if p.running {
+                    p.running = false;
+                    p.stage = "Stopped by an error".into();
+                }
+            });
+        }
+    }
+    let _finish = Finish(status.clone());
     let mut total = 0usize;
     for (label, task, format) in HUB_CATEGORIES {
         status.update(|p| p.stage = (*label).to_string());

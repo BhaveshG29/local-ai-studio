@@ -4,7 +4,7 @@
 //! Generation runs independently of the browser: closing or reloading the page doesn't stop
 //! it; the Stop button (or app shutdown) does. One generation per conversation at a time.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -113,6 +113,29 @@ pub struct ChatService {
     live: Mutex<HashMap<String, Arc<LiveGeneration>>>,
     /// Unsent message text kept when a send is rejected, so the user doesn't retype it.
     drafts: Mutex<HashMap<String, String>>,
+    /// Conversations whose answer is being set up (between the busy check and `live`).
+    starting: Mutex<HashSet<String>>,
+}
+
+/// Reserves a conversation while its answer is set up, until dropped. Without it two quick
+/// submits (a double click) could both pass the busy check and start two answers, one of
+/// which nothing could stop.
+struct Starting<'a> {
+    set: &'a Mutex<HashSet<String>>,
+    id: String,
+}
+
+impl<'a> Starting<'a> {
+    fn take(set: &'a Mutex<HashSet<String>>, id: &str) -> Option<Self> {
+        let fresh = set.lock().unwrap_or_else(std::sync::PoisonError::into_inner).insert(id.to_string());
+        fresh.then(|| Self { set, id: id.to_string() })
+    }
+}
+
+impl Drop for Starting<'_> {
+    fn drop(&mut self) {
+        self.set.lock().unwrap_or_else(std::sync::PoisonError::into_inner).remove(&self.id);
+    }
 }
 
 impl ChatService {
@@ -176,9 +199,13 @@ impl ChatService {
         conversation_id: &str,
         mode: StartMode,
     ) -> AppResult<Arc<LiveGeneration>> {
+        let busy = || AppError::conflict("An answer is still being written. Wait for it to finish or press Stop.");
         if self.is_generating(conversation_id) {
-            return Err(AppError::conflict("An answer is still being written. Wait for it to finish or press Stop."));
+            return Err(busy());
         }
+        let Some(_starting) = Starting::take(&self.starting, conversation_id) else {
+            return Err(busy());
+        };
         let cid = conversation_id.to_string();
         let (conv, messages) =
             state.db.call(move |c| Ok((convdb::get_conversation(c, &cid)?, convdb::messages(c, &cid)?))).await?;
@@ -504,6 +531,16 @@ async fn transcribe_for_chat(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_conversation_is_reserved_while_its_answer_starts() {
+        let set = Mutex::new(HashSet::new());
+        let first = Starting::take(&set, "c").expect("free");
+        assert!(Starting::take(&set, "c").is_none(), "a second start must be refused");
+        assert!(Starting::take(&set, "other").is_some());
+        drop(first);
+        assert!(Starting::take(&set, "c").is_some(), "released once the first start is done");
+    }
 
     #[tokio::test]
     async fn live_generation_snapshots_are_consistent() {

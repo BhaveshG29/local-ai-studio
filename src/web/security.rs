@@ -131,7 +131,9 @@ pub struct ClientLocal(pub bool);
 /// The middleware applied to every request.
 pub async fn guard(State(state): State<SharedState>, mut req: Request, next: Next) -> Response {
     let peer: Option<SocketAddr> = req.extensions().get::<ConnectInfo<SocketAddr>>().map(|c| c.0);
-    let peer_loopback = peer.map(|p| p.ip().is_loopback()).unwrap_or(true);
+    // `to_canonical`: on a dual-stack listener ([::]) a browser using 127.0.0.1 arrives as
+    // ::ffff:127.0.0.1, which is this computer too.
+    let peer_loopback = peer.map(|p| p.ip().to_canonical().is_loopback()).unwrap_or(true);
     // Binding a non-loopback address requires an explicit opt-in (setting or CLI flag), so
     // "network mode" is simply whether the server is actually reachable from the network.
     let network_enabled = state.server.addr().map(|a| !a.ip().is_loopback()).unwrap_or(false);

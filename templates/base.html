@@ -14,6 +14,45 @@
 <body class="page-{{ ctx.nav }}">
 <a class="skip-link" href="#main">Skip to content</a>
 <input type="checkbox" id="nav-toggle" class="nav-toggle" aria-label="Show menu">
+{#- Pop-ups come before the page content: a chat page that is still streaming an answer
+    hasn't sent anything after it yet. -#}
+<div id="theme-pop" popover class="popover">
+  <div class="popover-head"><h2>Theme</h2><button type="button" class="btn btn-ghost btn-icon" popovertarget="theme-pop" popovertargetaction="hide" title="Close"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#x"></use></svg><span class="sr-only">Close</span></button></div>
+  <div class="theme-quick">
+    {% for t in ctx.themes %}
+    <form method="post" action="/settings/theme">
+      <input type="hidden" name="theme" value="{{ t.slug }}">
+      <input type="hidden" name="back" value="{{ ctx.current_path }}">
+      <button type="submit" class="theme-chip{% if t.active %} is-active{% endif %}" data-theme="{{ t.slug }}" {% if t.active %}aria-pressed="true"{% else %}aria-pressed="false"{% endif %}>
+        <span class="theme-swatch" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span>{{ t.label }}</span>
+      </button>
+    </form>
+    {% endfor %}
+  </div>
+</div>
+
+<div id="keys-pop" popover class="popover">
+  <div class="popover-head"><h2>Keyboard shortcuts</h2><button type="button" class="btn btn-ghost btn-icon" popovertarget="keys-pop" popovertargetaction="hide" title="Close"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#x"></use></svg><span class="sr-only">Close</span></button></div>
+  <p class="muted small">Hold <kbd>Alt</kbd> (Windows/Linux, Chrome &amp; Edge), <kbd>Alt</kbd>+<kbd>Shift</kbd> (Firefox) or <kbd>Ctrl</kbd>+<kbd>Option</kbd> (Mac) and press:</p>
+  <dl class="keys">
+    <dt><kbd>C</kbd></dt><dd>Chat</dd>
+    <dt><kbd>N</kbd></dt><dd>New chat</dd>
+    <dt><kbd>S</kbd></dt><dd>Send message</dd>
+    <dt><kbd>X</kbd></dt><dd>Stop the answer</dd>
+    <dt><kbd>D</kbd></dt><dd>Discover models</dd>
+    <dt><kbd>J</kbd></dt><dd>Downloads</dd>
+    <dt><kbd>L</kbd></dt><dd>Library</dd>
+    <dt><kbd>I</kbd></dt><dd>Create images</dd>
+    <dt><kbd>T</kbd></dt><dd>Speech to text</dd>
+    <dt><kbd>Y</kbd></dt><dd>System</dd>
+    <dt><kbd>G</kbd></dt><dd>Settings</dd>
+    <dt><kbd>K</kbd></dt><dd>Search (on Discover)</dd>
+    <dt><kbd>H</kbd></dt><dd>Home</dd>
+  </dl>
+  <p class="muted small">Everywhere: <kbd>Tab</kbd> moves between controls, <kbd>Enter</kbd> activates buttons, <kbd>Esc</kbd> closes pop-ups.</p>
+</div>
+
 <div class="app">
   <label for="nav-toggle" class="nav-scrim" aria-hidden="true"></label>
   <header class="topbar">
@@ -53,43 +92,6 @@
     {% endif %}
     {% block content %}{% endblock %}
   </main>
-</div>
-
-<div id="theme-pop" popover class="popover">
-  <div class="popover-head"><h2>Theme</h2><button type="button" class="btn btn-ghost btn-icon" popovertarget="theme-pop" popovertargetaction="hide" title="Close"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#x"></use></svg><span class="sr-only">Close</span></button></div>
-  <div class="theme-quick">
-    {% for t in ctx.themes %}
-    <form method="post" action="/settings/theme">
-      <input type="hidden" name="theme" value="{{ t.slug }}">
-      <input type="hidden" name="back" value="{{ ctx.current_path }}">
-      <button type="submit" class="theme-chip{% if t.active %} is-active{% endif %}" data-theme="{{ t.slug }}" {% if t.active %}aria-pressed="true"{% else %}aria-pressed="false"{% endif %}>
-        <span class="theme-swatch" aria-hidden="true"><i></i><i></i><i></i></span>
-        <span>{{ t.label }}</span>
-      </button>
-    </form>
-    {% endfor %}
-  </div>
-</div>
-
-<div id="keys-pop" popover class="popover">
-  <div class="popover-head"><h2>Keyboard shortcuts</h2><button type="button" class="btn btn-ghost btn-icon" popovertarget="keys-pop" popovertargetaction="hide" title="Close"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#x"></use></svg><span class="sr-only">Close</span></button></div>
-  <p class="muted small">Hold <kbd>Alt</kbd> (Windows/Linux, Chrome &amp; Edge), <kbd>Alt</kbd>+<kbd>Shift</kbd> (Firefox) or <kbd>Ctrl</kbd>+<kbd>Option</kbd> (Mac) and press:</p>
-  <dl class="keys">
-    <dt><kbd>C</kbd></dt><dd>Chat</dd>
-    <dt><kbd>N</kbd></dt><dd>New chat</dd>
-    <dt><kbd>S</kbd></dt><dd>Send message</dd>
-    <dt><kbd>X</kbd></dt><dd>Stop the answer</dd>
-    <dt><kbd>D</kbd></dt><dd>Discover models</dd>
-    <dt><kbd>J</kbd></dt><dd>Downloads</dd>
-    <dt><kbd>L</kbd></dt><dd>Library</dd>
-    <dt><kbd>I</kbd></dt><dd>Create images</dd>
-    <dt><kbd>T</kbd></dt><dd>Speech to text</dd>
-    <dt><kbd>Y</kbd></dt><dd>System</dd>
-    <dt><kbd>G</kbd></dt><dd>Settings</dd>
-    <dt><kbd>K</kbd></dt><dd>Search (on Discover)</dd>
-    <dt><kbd>H</kbd></dt><dd>Home</dd>
-  </dl>
-  <p class="muted small">Everywhere: <kbd>Tab</kbd> moves between controls, <kbd>Enter</kbd> activates buttons, <kbd>Esc</kbd> closes pop-ups.</p>
 </div>
 </body>
 </html>

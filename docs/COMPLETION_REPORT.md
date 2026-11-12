@@ -30,7 +30,7 @@ implemented or not verified · ❌ not implemented
 | Downloads: cancel, retry, corrupted or truncated files, disk-space check, duplicates, gated/private repositories with a token, recovery after a restart | ☑ | Tests |
 | Ollama: detection and version, install instructions, pulls with progress | ✅ | Live: Ollama 0.32.14 detected, `qwen3:0.6b` pulled through the app |
 | Built-in engine (Candle) on the CPU, GGUF chat models | ✅ | Live and by the real-model test: Qwen2.5-0.5B-Instruct Q4_K_M; a fixed seed repeats its answer; measurements in section 3 |
-| Built-in engine on a GPU (`--features cuda` / `metal`) | ⚠ | Code paths exist and the app reports whether they are compiled in; no CUDA toolkit or Mac was available, so they were neither built nor run |
+| Built-in engine on a GPU (Metal on Apple Silicon, CUDA via `scripts/build.sh`) | ⚠ | Metal is built into Apple Silicon builds and compiled in CI; CUDA builds are made by the build scripts when the CUDA toolkit is present. No CUDA toolkit or Mac was available here, so neither has run on real hardware yet. The device probe survives a Mac without a GPU, and a model that doesn't fit on the GPU falls back to the CPU |
 | Ollama engine on the GPU | ✅ | Live: gemma4:e2b and qwen3:0.6b, “100 % on GPU” as reported by Ollama |
 | Chat: streaming, stop, regenerate, continue, edit, reasoning sections, Markdown, code highlighting, maths, titles, settings per chat, export and import | ✅ / ☑ | Live: streaming, regenerate, reasoning, maths, titles, statistics; the rest by tests |
 | OpenAI-compatible and JSON API | ✅ / ☑ | Real-model tests: the built-in engine and Ollama (`qwen3:0.6b`) answered through `/v1/chat/completions`; the JSON API and error cases by tests |
@@ -141,8 +141,9 @@ pages 11 · security 9 · server 7.
 Linux x86_64: built, tested and used (Ubuntu 24.04). Windows x64 and macOS (Apple Silicon and
 Intel): the release builds compile on GitHub Actions and CI runs the tests there on every push;
 on Windows the first run found one bug (item 12, fixed). The app has not yet been used
-interactively on them. GPU acceleration in the built-in engine needs a CUDA or Metal build and
-has not been tested; Ollama provides GPU use everywhere it supports the hardware.
+interactively on them. GPU acceleration in the built-in engine (Metal, built in on Apple
+Silicon; CUDA from a build-script build) has not yet run on real hardware; Ollama provides GPU
+use everywhere it supports the hardware.
 
 ## 7. Known limitations
 

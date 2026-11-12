@@ -47,10 +47,13 @@ endpoint = "https://huggingface.co"
 show_gated = true
 
 [inference]
-# Which engine to prefer when a model runs in both: auto | builtin | ollama
+# Which engine a model page offers first when both can run the model: auto | builtin | ollama
+# (auto: the one that can use the graphics card).
 preferred_backend = "auto"
 # Hardware for the built-in engine: auto | cpu | cuda | metal
-# (cuda and metal only work in builds compiled with those features).
+# auto uses the graphics card when this copy can: Metal on Apple Silicon (always built in),
+# CUDA on NVIDIA cards when built with it (scripts/build.sh does that when it finds the CUDA
+# toolkit). A model too big for the card's memory then runs on the processor instead.
 acceleration = "auto"
 # Processor threads for the built-in engine. Default: automatic (the performance cores on
 # processors that have them, otherwise one per physical core). Applied at start-up.

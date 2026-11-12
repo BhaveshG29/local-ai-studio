@@ -27,8 +27,13 @@ doc = false
 
 [features]
 default = []
-# GPU acceleration for the built-in Candle engine. These need the vendor toolkits
-# at build time: the CUDA toolkit (nvcc) for `cuda`, Xcode command line tools for `metal`.
+# GPU acceleration for the built-in Candle engine.
+#
+# * Apple Silicon: Metal is always compiled in (see the target section below), so the
+#   engine uses the GPU out of the box. `metal` is only needed to try it on an Intel Mac.
+# * NVIDIA (Linux, Windows): `cuda` needs the CUDA toolkit (nvcc) at build time, and its
+#   kernels are compiled for the graphics card in the building machine. `scripts/build.sh`
+#   and `scripts/build.ps1` turn it on automatically when a card and the toolkit are found.
 cuda = ["candle-core/cuda", "candle-nn/cuda", "candle-transformers/cuda"]
 cudnn = ["cuda", "candle-core/cudnn", "candle-nn/cudnn", "candle-transformers/cudnn"]
 metal = ["candle-core/metal", "candle-nn/metal", "candle-transformers/metal"]
@@ -80,6 +85,14 @@ url = "2"
 percent-encoding = "2"
 subtle = "2"
 regex = "1"
+
+# Apple Silicon: the built-in engine runs on the GPU (Metal) by default. Metal shaders are
+# compiled when the app first uses them, so building needs nothing beyond the Xcode
+# command line tools.
+[target.'cfg(all(target_os = "macos", target_arch = "aarch64"))'.dependencies]
+candle-core = { version = "0.11", features = ["metal"] }
+candle-nn = { version = "0.11", features = ["metal"] }
+candle-transformers = { version = "0.11", features = ["metal"] }
 
 [dev-dependencies]
 tempfile = "3"

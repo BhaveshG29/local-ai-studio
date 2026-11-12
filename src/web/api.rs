@@ -97,7 +97,8 @@ fn to_engine_messages(msgs: &[ApiMessage]) -> AppResult<Vec<EngineMessage>> {
 async fn run_to_end(state: &SharedState, model: &ModelRef, req: EngineRequest) -> AppResult<(String, GenStats)> {
     let engine = state.inference.engine_for(model).await?;
     let (tx, mut rx) = mpsc::unbounded_channel();
-    let cancel = CancellationToken::new();
+    // Shutting the app down stops the answer instead of waiting for it.
+    let cancel = state.shutdown.child_token();
     let handle = tokio::spawn(engine.chat(req, cancel.clone(), tx));
     let mut text = String::new();
     let mut out = Err(AppError::upstream("the engine stopped without an answer"));
@@ -146,6 +147,7 @@ pub async fn chat(State(state): State<SharedState>, Json(req): Json<ChatRequest>
     Ok(stream_lines(
         engine,
         ereq,
+        state.shutdown.child_token(),
         |ev| match ev {
             GenEvent::Text(t) => Some(format!("{}\n", json!({ "delta": t }))),
             GenEvent::Done(s) => Some(format!("{}\n", json!({ "done": true, "stats": s }))),
@@ -157,16 +159,17 @@ pub async fn chat(State(state): State<SharedState>, Json(req): Json<ChatRequest>
     ))
 }
 
-/// Streams engine events through `fmt`; cancels generation when the client disconnects.
+/// Streams engine events through `fmt`; cancels generation when the client disconnects or
+/// `cancel` (a child of the app's shutdown token) fires.
 fn stream_lines(
     engine: std::sync::Arc<dyn crate::inference::ChatEngine>,
     req: EngineRequest,
+    cancel: CancellationToken,
     fmt: impl Fn(GenEvent) -> Option<String> + Send + 'static,
     content_type: &'static str,
     trailer: Option<&'static str>,
 ) -> Response {
     let (tx, rx) = mpsc::channel::<Result<Bytes, Infallible>>(64);
-    let cancel = CancellationToken::new();
     tokio::spawn(async move {
         let (etx, mut erx) = mpsc::unbounded_channel();
         let handle = tokio::spawn(engine.chat(req, cancel.clone(), etx));
@@ -268,6 +271,7 @@ pub async fn openai_chat(State(state): State<SharedState>, Json(req): Json<OpenA
     Ok(stream_lines(
         engine,
         ereq,
+        state.shutdown.child_token(),
         move |ev| {
             let chunk = |delta: Value, finish: Value| {
                 format!(

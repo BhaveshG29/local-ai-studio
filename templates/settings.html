@@ -129,7 +129,6 @@
         </label>
         <ul class="small muted plain">
           {% for n in accel_notes %}{% if !n.is_empty() %}<li>{{ n }}</li>{% endif %}{% endfor %}
-          {% if !cuda_build && !metal_build %}<li>This copy was built for the CPU only. GPU builds are described in the README (they need the NVIDIA CUDA toolkit or a Mac).</li>{% endif %}
         </ul>
         <div class="param-grid">
           <label class="field" data-tip="Empty = automatic: prompts are read with all threads and answers written with the fastest cores. A number here is used for both. Takes effect after a restart."><span>Processor threads</span><input class="input" type="number" name="threads" min="1" max="512" value="{{ threads_text }}" placeholder="automatic"></label>
@@ -144,7 +143,7 @@
       <h2>Chat defaults</h2>
       <p class="small muted">New chats start with these. Each chat can change them in its <b>Chat settings</b>.</p>
       <form method="post" action="/settings/save/generation" class="stack">
-        <label class="field"><span>System prompt</span><textarea class="input" name="system_prompt" rows="3" placeholder="You are a helpful assistant.">{{ s.generation.system_prompt }}</textarea></label>
+        <label class="field"><span>System prompt</span><textarea class="input" name="system_prompt" rows="3" placeholder="None: new chats start without instructions">{{ s.generation.system_prompt }}</textarea></label>
         <div class="param-grid">
           <label class="field" data-tip="Higher = more creative and varied. Lower = more focused."><span>Creativity (temperature)</span><input class="input" type="number" name="temperature" min="0" max="2" step="0.05" value="{{ s.generation.temperature }}"></label>
           <label class="field"><span>Top-p</span><input class="input" type="number" name="top_p" min="0" max="1" step="0.01" value="{{ s.generation.top_p }}"></label>

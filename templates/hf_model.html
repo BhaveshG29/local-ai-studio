@@ -69,8 +69,9 @@
       </div>
     </form>
     {% if ollama_running %}
-    <details class="disclosure">
+    <details class="disclosure"{% if prefer_ollama.is_some() %} open{% endif %}>
       <summary>Get it with Ollama instead</summary>
+      {% if let Some(why) = prefer_ollama %}<p class="small"><b>{{ why }}</b></p>{% endif %}
       <p class="small muted">Ollama can pull GGUF files straight from Hugging Face, including ones the built-in engine can't run.</p>
       <div class="stack-sm">
       {% for v in variants %}{% if !v.ollama_ref.is_empty() %}
@@ -78,7 +79,7 @@
         <input type="hidden" name="name" value="{{ v.ollama_ref }}">
         <input type="hidden" name="back" value="/discover/hf/{{ id }}">
         <code class="grow truncate">{{ v.ollama_ref }}</code>
-        <button class="btn btn-sm" type="submit">Pull with Ollama</button>
+        <button class="btn btn-sm{% if prefer_ollama.is_some() && v.recommended %} btn-primary{% endif %}" type="submit">Pull with Ollama</button>
       </form>
       {% endif %}{% endfor %}
       </div>

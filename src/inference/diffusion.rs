@@ -335,6 +335,11 @@ impl DiffusionCache {
         }
     }
 
+    /// Whether a model is in memory (also while it is busy).
+    pub fn is_loaded(&self) -> bool {
+        self.slot.lock().unwrap_or_else(std::sync::PoisonError::into_inner).is_some()
+    }
+
     pub fn loaded_id(&self) -> Option<String> {
         self.slot
             .lock()
@@ -351,13 +356,13 @@ impl DiffusionCache {
         version: SdVersion,
         device: Device,
     ) -> Result<Arc<Mutex<SdPipeline>>> {
+        // Release the slot before waiting for the pipeline: a running generation holds the
+        // pipeline, and pages and the idle timer read the slot meanwhile.
+        let current = self.slot.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
+        if let Some(p) = current
+            && p.lock().map(|g| g.model_id == model_id).unwrap_or(false)
         {
-            let slot = self.slot.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-            if let Some(p) = slot.as_ref()
-                && p.lock().map(|g| g.model_id == model_id).unwrap_or(false)
-            {
-                return Ok(p.clone());
-            }
+            return Ok(p);
         }
         // Free the old model before loading the new one to limit peak memory.
         self.clear();

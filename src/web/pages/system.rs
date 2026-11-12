@@ -181,17 +181,21 @@ pub async fn page(State(state): State<SharedState>, headers: HeaderMap, Query(q)
                 d
             },
         },
-        AccelRow {
-            engine: "Built-in engine",
-            backend: "NVIDIA CUDA",
-            available: a.cuda_usable,
-            detail: a.cuda_detail.clone(),
-        },
-        AccelRow {
-            engine: "Built-in engine",
-            backend: "Apple Metal",
-            available: a.metal_usable,
-            detail: a.metal_detail.clone(),
+        // Only the kind of GPU this platform can have: Metal on macOS, CUDA elsewhere.
+        if cfg!(target_os = "macos") {
+            AccelRow {
+                engine: "Built-in engine",
+                backend: "Apple Metal",
+                available: a.metal_usable,
+                detail: a.metal_detail.clone(),
+            }
+        } else {
+            AccelRow {
+                engine: "Built-in engine",
+                backend: "NVIDIA CUDA",
+                available: a.cuda_usable,
+                detail: a.cuda_detail.clone(),
+            }
         },
     ];
     let mut loaded: Vec<LoadedView> = state
@@ -304,11 +308,11 @@ pub async fn unload(State(state): State<SharedState>, Form(f): Form<UnloadForm>)
             Err(e) => redirect_flash("/system", "error", &e.user_message()),
         },
         None if f.model_ref == "whisper" => {
-            state.inference.whisper.clear();
+            state.inference.unload_whisper();
             redirect_flash("/system", "ok", "Speech model unloaded.")
         }
         None if f.model_ref == "image" => {
-            state.inference.diffusion.clear();
+            state.inference.unload_image_model();
             redirect_flash("/system", "ok", "Image model unloaded.")
         }
         None => redirect_flash("/system", "error", "Unknown model."),

@@ -133,7 +133,7 @@
   <div class="field field-actions"><button class="btn btn-primary" type="submit">Search</button></div>
 </form>
 {% if ix_rows.is_empty() %}
-<div class="empty card"><svg class="icon icon-xl" aria-hidden="true"><use href="/assets/icons.svg#disk"></use></svg><p>{% if ix_total == 0 && q.is_empty() %}The index is empty. Press <b>Update index</b>, or browse the other tabs — what you see is added automatically.{% else %}Nothing in the index matches.{% endif %}</p></div>
+<div class="empty card"><svg class="icon icon-xl" aria-hidden="true"><use href="/assets/icons.svg#disk"></use></svg><p>{% if ix_counts.is_empty() %}The index is empty. Press <b>Update index</b>, or browse the other tabs — what you see is added automatically.{% else %}Nothing in the index matches.{% endif %}</p></div>
 {% else %}
 <p class="muted small">{{ ix_total }} {% if ix_total == 1 %}result{% else %}results{% endif %}</p>
 <div class="table-wrap card">

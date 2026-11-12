@@ -509,6 +509,9 @@ pub struct HfModelPage {
     pub readme_html: Option<String>,
     pub in_library: Vec<(String, String)>,
     pub ollama_running: bool,
+    /// Why the Ollama option is offered first (Settings → Inference → "When a model can run
+    /// in both engines"); `None` keeps the built-in download first.
+    pub prefer_ollama: Option<&'static str>,
     pub hf_url: String,
     pub base_models: Vec<String>,
 }
@@ -596,6 +599,23 @@ pub async fn hf_model(
         Support::ViaOllama => ("Runs through Ollama", "info"),
         Support::DownloadOnly => ("Download only", "warn"),
     };
+    let ollama_running = state.ollama.enabled() && state.ollama.version().await.is_ok();
+    // Automatic: offer first the engine that runs on the graphics card. Ollama uses NVIDIA and
+    // AMD cards by itself; the built-in engine only when built with CUDA (or on Apple Silicon).
+    let accel = state.system.accel();
+    let builtin_gpu = accel.cuda_usable || accel.metal_usable;
+    let card_for_ollama = snap.gpus.iter().any(|g| !g.unified_memory && matches!(g.vendor.as_str(), "NVIDIA" | "AMD"));
+    let prefer_ollama = if ollama_running && variants.iter().any(|v| !v.ollama_ref.is_empty()) {
+        match state.settings().inference.preferred_backend {
+            crate::config::BackendPreference::Ollama => Some("Shown first because Settings prefer Ollama."),
+            crate::config::BackendPreference::Auto if !builtin_gpu && card_for_ollama => Some(
+                "Recommended on this computer: Ollama runs the model on your graphics card, the built-in engine on the processor.",
+            ),
+            _ => None,
+        }
+    } else {
+        None
+    };
     let ctx = PageCtx::new(&state, &headers, &id, "discover").at(&format!("/discover/hf/{id}"));
     let page = HfModelPage {
         ctx: ctx.clone(),
@@ -623,7 +643,8 @@ pub async fn hf_model(
         total_size: human_bytes(info.total_size()),
         readme_html,
         in_library: mine.iter().map(|m| (format!("/library/model/local:{}", m.id), m.display_name.clone())).collect(),
-        ollama_running: state.ollama.enabled() && state.ollama.version().await.is_ok(),
+        ollama_running,
+        prefer_ollama,
         hf_url: format!("{}/{}", state.hub.endpoint(), id),
         base_models: info.base_models(),
         id,

@@ -59,7 +59,7 @@
     <div class="section-head"><h2 id="status-title">Status</h2><a class="link-more" href="/system">Details</a></div>
     <dl class="kv">
       <dt>Models</dt><dd>{{ model_count }} in your library · {{ chat_model_count }} ready to chat</dd>
-      <dt>Built-in engine</dt><dd>{{ engine_label }}</dd>
+      <dt>Built-in engine</dt><dd>{{ engine_label }}{% if let Some(h) = engine_hint %} <span class="muted small">· {{ h }} <a href="/system">How to turn it on</a></span>{% endif %}</dd>
       <dt>Ollama</dt>
       <dd>{% if ollama_running %}<span class="badge badge-ok">Running</span> version {{ ollama_version }}{% else if ollama_installed %}<span class="badge badge-warn">Installed, not running</span>{% else %}<span class="badge badge-muted">Not installed</span> <span class="muted small">(optional)</span>{% endif %}</dd>
       <dt>Memory</dt><dd><meter min="0" max="100" low="75" high="90" optimum="10" value="{{ ram_used_pct }}">{{ ram_used_pct }}%</meter> {{ ram_free }} free of {{ ram_total }}</dd>

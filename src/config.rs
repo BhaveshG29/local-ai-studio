@@ -414,8 +414,10 @@ impl Settings {
         }
         let trimmed = self.ollama.base_url.trim().trim_end_matches('/').to_string();
         self.ollama.base_url = if trimmed.is_empty() { OllamaSettings::default().base_url } else { trimmed };
+        // A hand-edited config.toml may hold an address that isn't one; use the real Hub then.
         let hf = self.huggingface.endpoint.trim().trim_end_matches('/').to_string();
-        self.huggingface.endpoint = if hf.is_empty() { HuggingFaceSettings::default().endpoint } else { hf };
+        let valid = url::Url::parse(&hf).is_ok_and(|u| matches!(u.scheme(), "http" | "https") && u.has_host());
+        self.huggingface.endpoint = if valid { hf } else { HuggingFaceSettings::default().endpoint };
     }
 
     pub fn models_dir(&self, paths: &AppPaths) -> PathBuf {

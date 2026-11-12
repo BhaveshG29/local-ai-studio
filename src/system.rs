@@ -6,7 +6,7 @@
 //! per engine in [`AccelInfo`].
 
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
@@ -236,7 +236,6 @@ fn collect(gpus: Vec<GpuInfo>, accel: AccelInfo) -> SystemInfo {
     }
 }
 
-/// SIMD features relevant to CPU inference speed.
 /// How many threads the built-in engine uses when Settings → Inference leaves it empty.
 ///
 /// Generating a token is a chain of small matrix products that every thread must finish
@@ -305,6 +304,7 @@ pub fn parse_cpu_list(s: &str) -> Option<Vec<usize>> {
     (!out.is_empty()).then_some(out)
 }
 
+/// SIMD features relevant to CPU inference speed.
 pub fn cpu_features() -> Vec<String> {
     #[allow(unused_mut)]
     let mut f: Vec<String> = Vec::new();
@@ -345,32 +345,42 @@ pub fn cpu_features() -> Vec<String> {
 }
 
 /// Probes which accelerators the built-in Candle engine can use.
+///
+/// Probing creates a GPU device (a CUDA context or a Metal command queue), so it runs once
+/// per process and later calls return the first answer.
 pub fn probe_acceleration() -> AccelInfo {
+    static PROBED: OnceLock<AccelInfo> = OnceLock::new();
+    PROBED.get_or_init(probe_acceleration_now).clone()
+}
+
+fn probe_acceleration_now() -> AccelInfo {
     let cuda_compiled = candle_core::utils::cuda_is_available();
     let metal_compiled = candle_core::utils::metal_is_available();
     let (cuda_usable, cuda_detail) = if cuda_compiled {
-        match candle_core::Device::new_cuda(0) {
-            Ok(_) => (true, "CUDA device 0 is available.".to_string()),
-            Err(e) => (false, format!("Built with CUDA, but no usable CUDA device: {e}")),
+        match try_device(|| candle_core::Device::new_cuda(0)) {
+            Ok(()) => (true, "NVIDIA GPU 0 is ready.".to_string()),
+            Err(e) => (false, format!("This copy includes CUDA, but no NVIDIA GPU can be used: {e}")),
         }
+    } else if cfg!(target_os = "macos") {
+        (false, "NVIDIA CUDA isn't available on macOS.".to_string())
     } else {
         (
             false,
-            "This build does not include CUDA. Rebuild with `--features cuda` (needs the CUDA toolkit) to use an NVIDIA GPU with the built-in engine.".to_string(),
+            "This copy was built without CUDA. To run the built-in engine on an NVIDIA graphics card, install the CUDA toolkit and build from source with scripts/build.sh (see the README). Ollama uses the graphics card either way.".to_string(),
         )
     };
     let (metal_usable, metal_detail) = if metal_compiled {
-        match candle_core::Device::new_metal(0) {
-            Ok(_) => (true, "Metal device 0 is available.".to_string()),
-            Err(e) => (false, format!("Built with Metal, but no usable Metal device: {e}")),
+        match try_device(|| candle_core::Device::new_metal(0)) {
+            Ok(()) => (true, "The Apple GPU is ready.".to_string()),
+            Err(e) => (false, format!("This copy includes Metal, but no Apple GPU can be used: {e}")),
         }
     } else if cfg!(target_os = "macos") {
         (
             false,
-            "This build does not include Metal. Rebuild with `--features metal` to use the Apple GPU with the built-in engine.".to_string(),
+            "Metal is built in on Apple Silicon Macs. On an Intel Mac the built-in engine uses the processor (to experiment, build with `cargo build --release --features metal`).".to_string(),
         )
     } else {
-        (false, "Metal is only available on macOS.".to_string())
+        (false, "Apple Metal is only available on Macs.".to_string())
     };
     let mut cpu_simd = Vec::new();
     if candle_core::utils::with_avx() {
@@ -383,6 +393,24 @@ pub fn probe_acceleration() -> AccelInfo {
         cpu_simd.push("F16C".to_string());
     }
     AccelInfo { cuda_compiled, cuda_usable, cuda_detail, metal_compiled, metal_usable, metal_detail, cpu_simd }
+}
+
+/// Creates (and drops) a device to see whether it works.
+///
+/// Candle panics instead of returning an error in some cases — Metal on a Mac that has no
+/// GPU at all (virtual machines, CI runners) indexes an empty device list — so a panic
+/// counts as "not usable" instead of stopping the app. The panic message is not printed:
+/// the reason is reported on the System page.
+fn try_device(create: impl FnOnce() -> candle_core::Result<candle_core::Device>) -> Result<(), String> {
+    let hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(create));
+    std::panic::set_hook(hook);
+    match outcome {
+        Ok(Ok(_)) => Ok(()),
+        Ok(Err(e)) => Err(e.to_string()),
+        Err(_) => Err("no GPU device was found".into()),
+    }
 }
 
 async fn run_probe(program: &str, args: &[&str]) -> Option<String> {

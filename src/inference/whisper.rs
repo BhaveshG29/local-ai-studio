@@ -408,6 +408,11 @@ impl WhisperCache {
         }
     }
 
+    /// Whether a model is in memory (also while it is busy).
+    pub fn is_loaded(&self) -> bool {
+        self.slot.lock().unwrap_or_else(std::sync::PoisonError::into_inner).is_some()
+    }
+
     pub fn loaded_id(&self) -> Option<String> {
         self.slot
             .lock()
