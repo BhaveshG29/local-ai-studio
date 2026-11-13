@@ -106,5 +106,8 @@ codegen-units = 16
 strip = "debuginfo"
 
 # Inference code is unusably slow without optimisations; keep debug builds usable.
+# Dependencies are optimised, so their debug info is of little use, and without it
+# target/debug stays a fraction of the size. This crate keeps its own for backtraces.
 [profile.dev.package."*"]
 opt-level = 3
+debug = false
