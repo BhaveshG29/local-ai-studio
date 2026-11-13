@@ -2,13 +2,11 @@
 
 **Author:** Bhavesh G and Claude (Opus 5.5)
 
-[![CI](https://github.com/BhaveshG29/local-ai-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/BhaveshG29/local-ai-studio/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/BhaveshG29/local-ai-studio)](https://github.com/BhaveshG29/local-ai-studio/releases/latest)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Rust 1.94+](https://img.shields.io/badge/rust-1.94%2B-orange.svg)](https://rustup.rs)
 
 Find, download and run AI models on your own computer, privately and without the cloud.
-
-![The Local AI Studio home page](docs/screenshots/home-midnight.webp)
 
 ## 1. Overview
 
@@ -26,7 +24,7 @@ have it installed, which adds thousands more models.
 
 The built-in engine uses your graphics card when it can. Apple Silicon Macs use it through
 Metal out of the box, and NVIDIA cards through CUDA when you build the program with the
-included build script (see [GPU acceleration](#6-gpu-acceleration)). The interface is plain
+included build script (see [GPU acceleration](#5-gpu-acceleration)). The interface is plain
 HTML and CSS without any JavaScript, so it works in every browser and stays fast.
 
 ## 2. Download and run
@@ -198,7 +196,7 @@ time, and can reuse the settings of any earlier image.
 - Six themes that change the whole look, not just a colour: Midnight, Graphite, Neon
   Cyberpunk, Pure Minimal, Warm Studio and Modern Glass.
 - An OpenAI-compatible API for other programs on your computer (see
-  [Configuration](#7-configuration)).
+  [Configuration](#6-configuration)).
 - Optional access from other devices on your network, protected by an access token.
 - Keyboard shortcuts, screen-reader labels, reduced-motion support, and a layout that works
   on a phone.
@@ -211,28 +209,14 @@ and safetensors chat models of the Llama, Mistral, Qwen 2/3 and Phi-3 families. 
 files, such as IQ quantisations or models split into several files, run through Ollama; model
 pages say so and offer it. Text-to-speech and video generation are not available yet.
 
-## 4. Screenshots
-
-These were taken from the running app on Ubuntu 24.04 (Intel Core Ultra 9 185H, RTX 4060
-Laptop GPU) with real models and real answers. Each page is shown in a different theme.
-
-| | |
-|---|---|
-| ![Home](docs/screenshots/home-midnight.webp) Home (Midnight) | ![Chat](docs/screenshots/chat-midnight.webp) Chat (Midnight) |
-| ![Discover](docs/screenshots/discover-graphite.webp) Discover (Graphite) | ![Model page](docs/screenshots/model-neon.webp) Model page (Neon Cyberpunk) |
-| ![Library](docs/screenshots/library-minimal.webp) Library (Pure Minimal) | ![Settings](docs/screenshots/settings-warm.webp) Settings (Warm Studio) |
-| ![System](docs/screenshots/system-glass.webp) System (Modern Glass) | ![Phone](docs/screenshots/chat-phone-glass.webp) Chat on a phone-sized window (Modern Glass) |
-
-The same page in all six themes is in [`docs/screenshots/themes/`](docs/screenshots/themes/).
-
-## 5. System requirements
+## 4. System requirements
 
 | | Minimum | Recommended |
 |---|---|---|
 | Operating system | Windows 10 or 11 (64-bit), macOS 13 or newer, 64-bit Linux (the release build needs glibc 2.35 or newer, as in Ubuntu 22.04) | Current versions |
 | Processor | 64-bit, 4 cores; AVX2 (Intel, AMD) or NEON (ARM) strongly recommended | 8 cores or more |
 | Memory | 8 GB, for small models (0.5 to 3 billion parameters) | 16 GB for 7 to 8 billion, 32 GB or more for larger ones |
-| Graphics card | Not required | Apple Silicon, or an NVIDIA card (see [GPU acceleration](#6-gpu-acceleration)) |
+| Graphics card | Not required | Apple Silicon, or an NVIDIA card (see [GPU acceleration](#5-gpu-acceleration)) |
 | Disk | 200 MB for the app | An SSD with 20 GB or more free for models (0.5 to 10 GB each) |
 | Browser | Any current one: Firefox, Chrome, Edge, Safari | |
 
@@ -242,7 +226,7 @@ Optional software:
   use on NVIDIA and AMD cards.
 - [ffmpeg](https://ffmpeg.org/download.html) for videos in chats and video transcription.
 
-## 6. GPU acceleration
+## 5. GPU acceleration
 
 The built-in engine chooses its hardware with **Settings → Inference → Hardware**, which is
 set to *Automatic*: it uses a graphics card when this copy of the program can, and the
@@ -269,7 +253,7 @@ per second). **Settings → Inference → Processor threads** sets one number fo
 to choose yourself. For the fastest CPU build on your own machine (not to share with others),
 build with `RUSTFLAGS="-C target-cpu=native"`.
 
-## 7. Configuration
+## 6. Configuration
 
 Everything can be changed on the **Settings** page. The settings are stored in a
 `config.toml` file in the data folder:
@@ -319,7 +303,7 @@ Model names are `local:<id>` for the built-in engine and `ollama:<name>` for Oll
 `/v1/models` lists them. There is also a JSON API under `/api` (`/api/health`,
 `/api/v1/system`, `/api/v1/models`, `/api/v1/downloads`, `/api/v1/chat`).
 
-## 8. Project structure
+## 7. Project structure
 
 ```text
 local-ai-studio/
@@ -341,11 +325,11 @@ local-ai-studio/
 ├── tests/                  Integration tests with fake Hugging Face and Ollama servers
 ├── scripts/                build.sh and build.ps1, which pick GPU support automatically
 ├── config/                 Example configuration
-├── docs/                   Screenshots and the completion report
+├── docs/                   The completion report
 └── tools/                  Generator for THIRD_PARTY_LICENSES.md
 ```
 
-## 9. How it works
+## 8. How it works
 
 Local AI Studio is one Rust program that contains the web server, the inference engines, the
 database and all assets. Requests are handled by [Axum](https://github.com/tokio-rs/axum) on
@@ -378,7 +362,7 @@ rebinding and cross-site requests. Model output is rendered with raw HTML escape
 `http`, `https` and `mailto` links allowed. File paths from requests are never allowed to leave
 their folders. The Hugging Face token stays in the keychain and is only sent to Hugging Face.
 
-## 10. Testing
+## 9. Testing
 
 ```bash
 cargo test                                   # unit and integration tests, no internet or models needed
@@ -407,9 +391,11 @@ LAS_TEST_NETWORK=1                 cargo test --release --test real_models -- --
 `tests/real_models.rs` lists the others (Whisper and image generation). The results of the
 last full run are in [`docs/COMPLETION_REPORT.md`](docs/COMPLETION_REPORT.md).
 
-GitHub Actions checks formatting and lints, then builds and tests on Ubuntu, Windows, macOS on
-Apple Silicon (where it also checks that Metal is built in) and macOS on Intel. Tagged versions
-are built for all four by the release workflow.
+GitHub Actions runs only when you publish a version. Pushing a tag such as `v0.3.0` first
+checks formatting and lints and runs the tests on Ubuntu, Windows, macOS on Apple Silicon (where
+it also checks that Metal is built in) and macOS on Intel. Only if all of that passes are the four
+downloads built and published on the Releases page. To run the checks without releasing, start
+the CI workflow by hand from the repository's Actions tab.
 
 | Platform | Automated tests | Built-in engine | GPU in the built-in engine | Ollama |
 |---|---|---|---|---|
@@ -422,7 +408,7 @@ The program has so far been used day to day only on Linux, and the GPU paths of 
 engine have not yet been run on real hardware by the authors. Reports from Windows and Mac
 users are very welcome.
 
-## 11. Troubleshooting
+## 10. Troubleshooting
 
 | Problem | What to do |
 |---|---|
@@ -433,7 +419,7 @@ users are very welcome.
 | A model says "Can't run" | The model page gives the reason (unsupported architecture or quantisation, missing tokenizer, split file). Most such GGUF files run through Ollama: use **Get it with Ollama instead**. |
 | A gated model fails with 403 | Accept the license on huggingface.co, then add a token in Settings → Hugging Face. |
 | Downloads stop or fail | Each file is tried up to four times and resumes where it stopped. After that, press **Retry**. Check your free disk space and connection. |
-| Answers are slow | Choose a smaller or more quantised model (Q4_K_M), close other programs, or use the GPU (see [GPU acceleration](#6-gpu-acceleration)). |
+| Answers are slow | Choose a smaller or more quantised model (Q4_K_M), close other programs, or use the GPU (see [GPU acceleration](#5-gpu-acceleration)). |
 | My NVIDIA card isn't used | The Linux and Windows releases run the built-in engine on the processor. Install the CUDA toolkit and build with `scripts/build.sh`; the System page shows whether CUDA is available. Ollama uses the card either way. |
 | The CUDA build fails with "unsupported GNU version" | Your CUDA toolkit is older than your system's compiler. Install a newer toolkit, or point it at an older compiler: `NVCC_CCBIN=g++-12 ./scripts/build.sh`. |
 | "error while loading shared libraries: libcublas…" | The CUDA libraries aren't on the library path, for example `export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH`. |
@@ -442,7 +428,7 @@ users are very welcome.
 | Videos or video transcription fail | Install ffmpeg. Settings → Media shows whether it was found, and lets you set its path. |
 | Something else | Settings → Logging → **Open logs folder**. Raise the level to `debug`, try again and look at the newest log. Settings → Data & cache can clear caches or reset settings without touching models or chats. |
 
-## 12. License
+## 11. License
 
 Local AI Studio is licensed under the [Apache License 2.0](LICENSE) (see also
 [`NOTICE`](NOTICE)). It is a permissive license like MIT, and it also includes an explicit
@@ -460,7 +446,7 @@ AI models are not part of this project. The models you download belong to their 
 and their licenses may restrict commercial use or require attribution. Checking and following
 them is up to you; Local AI Studio shows each model's license where the publisher provides one.
 
-## 13. Future improvements
+## 12. Future improvements
 
 - Vision models in the built-in engine, so image questions don't need Ollama.
 - Text-to-speech for spoken answers.

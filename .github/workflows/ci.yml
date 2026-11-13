@@ -1,9 +1,9 @@
 name: CI
 
+# Not run on ordinary pushes. The release workflow runs these checks before it builds a new
+# version, and they can be started by hand from the Actions tab.
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_call:
   workflow_dispatch:
 
 permissions:

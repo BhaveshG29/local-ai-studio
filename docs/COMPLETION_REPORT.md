@@ -41,7 +41,7 @@ implemented or not verified · ❌ not implemented
 | Video generation, text to speech | ❌ | No practical Rust-native model; the interface never offers them |
 | Library: load, unload, rename, delete, inspect, import a `.gguf`, update | ✅ / ☑ | Live: listing, load state, sizes, sources; actions by tests |
 | Hardware dashboard | ✅ | Live: CPU and features, RAM, swap, RTX 4060 (8 GB) and Intel iGPU, disks, models in memory, which engine can use which hardware |
-| Six themes, remembered | ✅ | Live: switching saved to `config.toml`; tests; screenshots of all six |
+| Six themes, remembered | ✅ | Live: switching saved to `config.toml`; tests |
 | Settings | ✅ / ☑ | Live: cache clearing; validation by tests |
 | Local server: `127.0.0.1` by default, network access only with explicit opt-in and an access token, port conflicts, graceful shutdown | ✅ / ☑ | Live: three Ctrl+C restarts, each logged as “stopped cleanly”; the rest by tests |
 | Security: Host-header check, cross-site request blocking, CSP without scripts, path traversal, HTML escaping (including maths), token never written to disk, size limits | ☑ | Tests |
