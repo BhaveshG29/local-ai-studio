@@ -1,0 +1,32 @@
+{#- Under the composer's text box: the voice-input status line (one polite live region; the
+    script writes state changes into it, never the words being heard; the timer and the
+    "Transcribing" note are aria-hidden), then the microphone's pop-ups. Needs `mic` (MicView)
+    and `mic_download` (offer to download Whisper Base here: it isn't on disk or on its way).
+    #mic-help is always there: when Whisper Base stops being usable after the page was made,
+    the script turns the microphone into the crossed-out one, pointing at it. Its Download
+    button belongs to #mic-download, a form outside the composer (forms can't nest). -#}
+<div class="dictation-status is-empty" data-dictation-status role="status" aria-live="polite"><span data-dictation-message></span><span class="dictation-note" aria-hidden="true"><span data-dictation-timer></span><span data-dictation-busy hidden> · Transcribing…</span></span></div>
+<div id="mic-help" popover class="popover mic-pop">
+  <h2>Voice input needs Whisper Base</h2>
+  <p class="mic-pop-reason" data-mic-reason>{{ mic.reason }}</p>
+  {% if mic.downloading %}
+  <p class="mic-pop-progress"><span class="spinner" aria-hidden="true"></span>Whisper Base is downloading… When it's done, reload this page and click the microphone again.</p>
+  {% else if mic_download %}
+  <p class="muted">Whisper Base is a free speech model ({{ mic.size }} to download) that turns what you say into text on this computer; nothing is sent anywhere. Download it here or on the Speech models page, then reload this page and click the microphone again.</p>
+  {% else %}
+  <p class="muted">The Speech models page shows what to do. When Whisper Base is ready, reload this page and click the microphone again.</p>
+  {% endif %}
+  <div class="cluster">
+    {% if mic_download %}<button class="btn btn-primary" type="submit" form="mic-download"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#download"></use></svg>Download Whisper Base</button>{% endif %}
+    <a class="btn{% if !mic_download %} btn-primary{% endif %}" href="/transcribe#whisper-base">Go to Speech models</a>
+    <button type="button" class="btn btn-ghost" popovertarget="mic-help" popovertargetaction="hide">Close</button>
+  </div>
+</div>
+{% if mic.ready %}
+<div id="mic-nojs" popover class="popover mic-pop">
+  <h2>Voice input needs JavaScript</h2>
+  <p>JavaScript is turned off in this browser, or the page's script couldn't load. Reload the page to try again.</p>
+  <p class="muted">You can still type your message, or attach a recording with the paper clip.</p>
+  <div class="cluster"><button type="button" class="btn" popovertarget="mic-nojs" popovertargetaction="hide">Close</button></div>
+</div>
+{% endif %}

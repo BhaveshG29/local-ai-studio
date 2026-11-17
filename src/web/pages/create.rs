@@ -382,7 +382,7 @@ async fn start_inner(state: &SharedState, f: &CreateForm) -> AppResult<String> {
         .await?
         .filter(|m| m.kind == "image-generation" && m.analysis.runnable)
         .ok_or_else(|| {
-            AppError::bad_request("Choose an image model (download SD-Turbo from Discover if you have none).")
+            AppError::bad_request("Choose an image model (download SD-Turbo from the Marketplace if you have none).")
         })?;
     let version =
         model.analysis.sd_version.ok_or_else(|| AppError::bad_request("Unknown Stable Diffusion version."))?;

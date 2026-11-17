@@ -9,80 +9,96 @@
 <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/assets/app.css?v={{ ctx.css_rev }}">
 <link rel="stylesheet" href="/assets/themes.css?v={{ ctx.css_rev }}">
+<script src="/assets/app.js?v={{ ctx.css_rev }}" async></script>
 {% block head %}{% endblock %}
 </head>
 <body class="page-{{ ctx.nav }}">
 <a class="skip-link" href="#main">Skip to content</a>
-<input type="checkbox" id="nav-toggle" class="nav-toggle" aria-label="Show menu">
+{#- The sidebar opens and closes with HTML and CSS only, so it never reloads the page (an
+    answer being written keeps streaming, a typed message stays). On wide screens this
+    checkbox and its labels shrink it to a slim rail of icons. On narrow screens it is a
+    drawer: the sidebar is a popover that the top bar's Menu button opens, and Esc, a click
+    beside it or its close button close (it always starts closed).
+    In a chat, #nav-toggle also belongs to the composer form (form="composer-form"), so each
+    message sent says whether the sidebar is hidden; the server remembers it in a cookie and
+    the chat page that follows starts the same way (ctx.sidebar_collapsed). -#}
+<input type="checkbox" id="nav-toggle" class="nav-toggle" aria-label="Collapse the sidebar" aria-controls="sidebar"{% if ctx.nav == "chat" %} name="sidebar" value="collapsed" form="composer-form"{% endif %}{% if ctx.sidebar_collapsed %} checked{% endif %}>
 {#- Pop-ups come before the page content: a chat page that is still streaming an answer
     hasn't sent anything after it yet. -#}
-<div id="theme-pop" popover class="popover">
-  <div class="popover-head"><h2>Theme</h2><button type="button" class="btn btn-ghost btn-icon" popovertarget="theme-pop" popovertargetaction="hide" title="Close"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#x"></use></svg><span class="sr-only">Close</span></button></div>
-  <div class="theme-quick">
-    {% for t in ctx.themes %}
-    <form method="post" action="/settings/theme">
-      <input type="hidden" name="theme" value="{{ t.slug }}">
-      <input type="hidden" name="back" value="{{ ctx.current_path }}">
-      <button type="submit" class="theme-chip{% if t.active %} is-active{% endif %}" data-theme="{{ t.slug }}" {% if t.active %}aria-pressed="true"{% else %}aria-pressed="false"{% endif %}>
-        <span class="theme-swatch" aria-hidden="true"><i></i><i></i><i></i></span>
-        <span>{{ t.label }}</span>
-      </button>
-    </form>
-    {% endfor %}
-  </div>
-</div>
-
 <div id="keys-pop" popover class="popover">
   <div class="popover-head"><h2>Keyboard shortcuts</h2><button type="button" class="btn btn-ghost btn-icon" popovertarget="keys-pop" popovertargetaction="hide" title="Close"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#x"></use></svg><span class="sr-only">Close</span></button></div>
   <p class="muted small">Hold <kbd>Alt</kbd> (Windows/Linux, Chrome &amp; Edge), <kbd>Alt</kbd>+<kbd>Shift</kbd> (Firefox) or <kbd>Ctrl</kbd>+<kbd>Option</kbd> (Mac) and press:</p>
   <dl class="keys">
-    <dt><kbd>C</kbd></dt><dd>Chat</dd>
     <dt><kbd>N</kbd></dt><dd>New chat</dd>
+    <dt><kbd>C</kbd></dt><dd>Chats</dd>
     <dt><kbd>S</kbd></dt><dd>Send message</dd>
     <dt><kbd>X</kbd></dt><dd>Stop the answer</dd>
-    <dt><kbd>D</kbd></dt><dd>Discover models</dd>
+    <dt><kbd>M</kbd></dt><dd>Voice input: start or stop (in a chat)</dd>
+    <dt><kbd>D</kbd></dt><dd>Marketplace</dd>
     <dt><kbd>J</kbd></dt><dd>Downloads</dd>
     <dt><kbd>L</kbd></dt><dd>Library</dd>
-    <dt><kbd>I</kbd></dt><dd>Create images</dd>
-    <dt><kbd>T</kbd></dt><dd>Speech to text</dd>
+    <dt><kbd>T</kbd></dt><dd>Speech models</dd>
+    <dt><kbd>I</kbd></dt><dd>Images</dd>
     <dt><kbd>Y</kbd></dt><dd>System</dd>
     <dt><kbd>G</kbd></dt><dd>Settings</dd>
-    <dt><kbd>K</kbd></dt><dd>Search (on Discover)</dd>
+    <dt><kbd>K</kbd></dt><dd>Search (in the Marketplace)</dd>
     <dt><kbd>H</kbd></dt><dd>Home</dd>
+  </dl>
+  <p class="muted small">In the message box:</p>
+  <dl class="keys">
+    <dt><kbd>Enter</kbd></dt><dd>Send message</dd>
+    <dt><kbd>Shift</kbd>+<kbd>Enter</kbd></dt><dd>New line</dd>
   </dl>
   <p class="muted small">Everywhere: <kbd>Tab</kbd> moves between controls, <kbd>Enter</kbd> activates buttons, <kbd>Esc</kbd> closes pop-ups.</p>
 </div>
 
 <div class="app">
-  <label for="nav-toggle" class="nav-scrim" aria-hidden="true"></label>
-  <header class="topbar">
-    <a class="brand" href="/"><svg class="brand-mark" aria-hidden="true"><use href="/assets/icons.svg#logo"></use></svg><span class="brand-name">Local AI Studio</span></a>
-    <label for="nav-toggle" class="btn btn-ghost btn-icon" title="Menu"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#menu"></use></svg><span class="sr-only">Menu</span></label>
-  </header>
-  <aside class="sidebar" aria-label="Main navigation">
-    <a class="brand" href="/" accesskey="h">
-      <svg class="brand-mark" aria-hidden="true"><use href="/assets/icons.svg#logo"></use></svg>
-      <span class="brand-name">Local AI Studio</span>
-    </a>
-    <nav class="nav">
-      <a href="/" {% if ctx.nav == "home" %}class="active" aria-current="page"{% endif %}><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#home"></use></svg><span>Home</span></a>
-      <a href="/chat" accesskey="c" {% if ctx.nav == "chat" %}class="active" aria-current="page"{% endif %}><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#chat"></use></svg><span>Chat</span>{% if ctx.generating > 0 %}<span class="nav-dot" title="Something is being generated"></span>{% endif %}</a>
-      <a href="/discover" accesskey="d" {% if ctx.nav == "discover" %}class="active" aria-current="page"{% endif %}><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#compass"></use></svg><span>Discover</span></a>
-      <a href="/downloads" accesskey="j" {% if ctx.nav == "downloads" %}class="active" aria-current="page"{% endif %}><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#download"></use></svg><span>Downloads</span>{% if ctx.active_downloads > 0 %}<span class="nav-count">{{ ctx.active_downloads }}</span>{% endif %}</a>
-      <a href="/library" accesskey="l" {% if ctx.nav == "library" %}class="active" aria-current="page"{% endif %}><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#library"></use></svg><span>Library</span></a>
-      <div class="nav-sep" role="separator"></div>
-      <a href="/create" accesskey="i" {% if ctx.nav == "create" %}class="active" aria-current="page"{% endif %}><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#image"></use></svg><span>Create images</span></a>
-      <a href="/transcribe" accesskey="t" {% if ctx.nav == "transcribe" %}class="active" aria-current="page"{% endif %}><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#mic"></use></svg><span>Speech to text</span></a>
-      <div class="nav-sep" role="separator"></div>
-      <a href="/system" accesskey="y" {% if ctx.nav == "system" %}class="active" aria-current="page"{% endif %}><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#cpu"></use></svg><span>System</span></a>
-      <a href="/settings" accesskey="g" {% if ctx.nav == "settings" %}class="active" aria-current="page"{% endif %}><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#settings"></use></svg><span>Settings</span></a>
+  <aside class="sidebar" id="sidebar" aria-label="Sidebar" popover>
+    <div class="sidebar-head">
+      <a class="brand" href="/" accesskey="h" title="Home" {% if ctx.nav == "home" %}aria-current="page"{% endif %}><svg class="brand-mark" aria-hidden="true"><use href="/assets/icons.svg#logo"></use></svg><span class="brand-name">Local AI Studio</span></a>
+      <label for="nav-toggle" class="side-btn sidebar-collapse" title="Collapse sidebar"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#sidebar"></use></svg><span class="sr-only">Collapse sidebar</span></label>
+      <label for="nav-toggle" class="side-btn sidebar-expand" title="Expand sidebar"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#sidebar"></use></svg><span class="sr-only">Expand sidebar</span></label>
+      <button type="button" class="side-btn sidebar-close" popovertarget="sidebar" popovertargetaction="hide" title="Close menu"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#x"></use></svg><span class="sr-only">Close menu</span></button>
+    </div>
+    <nav class="nav" aria-label="Main">
+      <a href="/chat?new=1" accesskey="n" title="New chat" {% if ctx.current_path == "/chat?new=1" %}class="active" aria-current="page"{% endif %}><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#plus"></use></svg><span class="nav-label">New chat</span></a>
+      <a href="/chat" accesskey="c" title="Chats" {% if ctx.nav == "chat" && ctx.current_path != "/chat?new=1" %}class="active" aria-current="page"{% endif %}><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#chat"></use></svg><span class="nav-label">Chats</span>{% if ctx.generating > 0 %}<span class="nav-dot" title="Something is being generated"><span class="sr-only">(working)</span></span>{% endif %}</a>
+      <div class="nav-section" role="group" aria-labelledby="nav-models">
+        <div class="nav-group" id="nav-models">Models</div>
+        <a href="/discover" accesskey="d" title="Marketplace" {% if ctx.nav == "discover" %}class="active" aria-current="page"{% endif %}><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#store"></use></svg><span class="nav-label">Marketplace</span></a>
+        <a href="/downloads" accesskey="j" title="Downloads" {% if ctx.nav == "downloads" %}class="active" aria-current="page"{% endif %}><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#download"></use></svg><span class="nav-label">Downloads</span>{% if ctx.active_downloads > 0 %}<span class="nav-count"><span class="sr-only">(</span>{{ ctx.active_downloads }}<span class="sr-only"> running)</span></span>{% endif %}</a>
+        <a href="/library" accesskey="l" title="Library" {% if ctx.nav == "library" %}class="active" aria-current="page"{% endif %}><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#library"></use></svg><span class="nav-label">Library</span></a>
+        <a href="/transcribe" accesskey="t" title="Speech models" {% if ctx.nav == "transcribe" %}class="active" aria-current="page"{% endif %}><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#mic"></use></svg><span class="nav-label">Speech models</span></a>
+      </div>
+      <div class="nav-section" role="group" aria-labelledby="nav-create">
+        <div class="nav-group" id="nav-create">Create</div>
+        <a href="/create" accesskey="i" title="Images" {% if ctx.nav == "create" %}class="active" aria-current="page"{% endif %}><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#image"></use></svg><span class="nav-label">Images</span></a>
+      </div>
     </nav>
+    {% block sidebar_extra %}{% endblock %}
     <div class="sidebar-foot">
-      <button type="button" class="btn btn-ghost btn-sm" popovertarget="theme-pop"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#palette"></use></svg>{{ ctx.theme_label }}</button>
-      <button type="button" class="btn btn-ghost btn-sm" popovertarget="keys-pop"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#keyboard"></use></svg>Shortcuts</button>
-      <span class="version">v{{ ctx.version }}</span>
+      <nav class="nav" aria-label="App">
+        <a href="/settings" accesskey="g" title="Settings" {% if ctx.nav == "settings" %}class="active" aria-current="page"{% endif %}><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#settings"></use></svg><span class="nav-label">Settings</span></a>
+        <a href="/system" accesskey="y" title="System" {% if ctx.nav == "system" %}class="active" aria-current="page"{% endif %}><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#cpu"></use></svg><span class="nav-label">System</span></a>
+      </nav>
+      <div class="sidebar-tools">
+        <form method="post" action="/settings/theme" class="theme-switch">
+          <input type="hidden" name="theme" value="{{ ctx.other_theme.slug }}">
+          <input type="hidden" name="back" value="{% if ctx.current_path.is_empty() %}/{% else %}{{ ctx.current_path }}{% endif %}">
+          <button type="submit" class="side-btn" title="Switch to {{ ctx.other_theme.label }}"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#{% if ctx.dark %}sun{% else %}moon{% endif %}"></use></svg><span class="sr-only">Switch to {{ ctx.other_theme.label }}</span></button>
+        </form>
+        <button type="button" class="side-btn" popovertarget="keys-pop" title="Keyboard shortcuts"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#keyboard"></use></svg><span class="sr-only">Keyboard shortcuts</span></button>
+        <span class="version">v{{ ctx.version }}</span>
+      </div>
     </div>
   </aside>
+  {#- The small top bar of narrow screens; its Menu button opens the sidebar. It comes after
+      the sidebar, which floats over the page there, so the bar still shows at the top. -#}
+  <header class="topbar">
+    <button type="button" class="side-btn topbar-menu" popovertarget="sidebar" title="Menu"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#menu"></use></svg><span class="sr-only">Menu</span></button>
+    <a class="brand" href="/"><svg class="brand-mark" aria-hidden="true"><use href="/assets/icons.svg#logo"></use></svg><span class="brand-name">Local AI Studio</span></a>
+    <a class="side-btn topbar-new" href="/chat?new=1" title="New chat"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#plus"></use></svg><span class="sr-only">New chat</span></a>
+  </header>
   <main id="main" class="main" tabindex="-1">
     {% if ctx.network_exposed %}
     <div class="notice notice-warn" role="alert"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#alert"></use></svg><div><b>Network sharing is on.</b> Other devices on your network can reach this app if they have the access token. Turn it off in <a href="/settings#server">Settings → Server</a>.</div></div>

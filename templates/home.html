@@ -7,16 +7,16 @@
     <p class="lead">Find a model, download it once, and use it offline. Nothing you type leaves this machine.</p>
   </div>
   <div class="cluster">
-    <a class="btn btn-primary btn-lg" href="/chat?new=1" accesskey="n"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#plus"></use></svg>New chat</a>
-    <a class="btn btn-lg" href="/discover"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#compass"></use></svg>Find models</a>
+    <a class="btn btn-primary btn-lg" href="/chat?new=1"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#plus"></use></svg>New chat</a>
+    <a class="btn btn-lg" href="/discover">Browse the Marketplace</a>
   </div>
 </header>
 
 {% if first_run %}
-<section class="card onboarding" aria-labelledby="start-title">
+<section class="onboarding" aria-labelledby="start-title">
   <h2 id="start-title">Get started in three steps</h2>
   <ol class="steps">
-    <li><b>Pick a model</b> below (or browse <a href="/discover">Discover</a>). Each page shows the size and whether it fits your computer.</li>
+    <li><b>Pick a model</b> below (or browse the <a href="/discover">Marketplace</a>). Each page shows the size and whether it fits your computer.</li>
     <li><b>Press Download</b> and wait for it to finish on the <a href="/downloads">Downloads</a> page.</li>
     <li><b>Start chatting.</b> Your first message loads the model into memory.</li>
   </ol>
@@ -28,34 +28,30 @@
   <div class="grid grid-cards">
     {% for s in starters %}
     <a class="card card-link starter" href="{{ s.href }}">
-      <div class="card-top"><span class="badge {% if s.engine == "Ollama" %}badge-info{% else %}badge-accent{% endif %}">{{ s.engine }}</span>{% if s.needs_ollama && !ollama_running %}<span class="badge badge-muted" title="Install and start Ollama to use this one">needs Ollama</span>{% endif %}</div>
+      <div class="card-top"><span>{{ s.engine }}</span>{% if s.needs_ollama && !ollama_running %}<span title="Install and start Ollama to use this one">· needs Ollama</span>{% endif %}</div>
       <h3>{{ s.title }}</h3>
       <p class="muted">{{ s.description }}</p>
-      <span class="card-cta">See details <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#chevron-right"></use></svg></span>
     </a>
     {% endfor %}
   </div>
 </section>
 
-<div class="grid grid-2">
-  <section class="card" aria-labelledby="recent-title">
+<div class="grid-2">
+  <section aria-labelledby="recent-title">
     <div class="section-head"><h2 id="recent-title">Recent chats</h2><a class="link-more" href="/chat?new=1">New chat</a></div>
     {% if recent.is_empty() %}
-    <div class="empty">
-      <svg class="icon icon-xl" aria-hidden="true"><use href="/assets/icons.svg#chat"></use></svg>
-      <p>No conversations yet.</p>
-      {% if chat_model_count > 0 %}<a class="btn btn-primary" href="/chat?new=1">Start your first chat</a>{% else %}<p class="muted small">Download a chat model first.</p>{% endif %}
-    </div>
+    <p class="muted">No conversations yet.</p>
+    {% if chat_model_count > 0 %}<a class="btn btn-primary btn-sm" href="/chat?new=1">Start your first chat</a>{% else %}<p class="muted small">Download a chat model first.</p>{% endif %}
     {% else %}
     <ul class="list">
       {% for c in recent %}
-      <li><a class="list-link" href="/chat/{{ c.id }}"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#chat"></use></svg><span class="grow truncate">{{ c.title }}</span><span class="muted small">{{ c.when }}</span></a></li>
+      <li><a class="list-link" href="/chat/{{ c.id }}"><span class="grow truncate">{{ c.title }}</span><span class="muted small">{{ c.when }}</span></a></li>
       {% endfor %}
     </ul>
     {% endif %}
   </section>
 
-  <section class="card" aria-labelledby="status-title">
+  <section aria-labelledby="status-title">
     <div class="section-head"><h2 id="status-title">Status</h2><a class="link-more" href="/system">Details</a></div>
     <dl class="kv">
       <dt>Models</dt><dd>{{ model_count }} in your library · {{ chat_model_count }} ready to chat</dd>
@@ -77,7 +73,7 @@
 </div>
 
 {% if !downloads.is_empty() %}
-<section class="card" aria-labelledby="dl-title">
+<section aria-labelledby="dl-title">
   <div class="section-head"><h2 id="dl-title">Downloading</h2><a class="link-more" href="/downloads">Open downloads</a></div>
   <ul class="list">
     {% for d in downloads %}

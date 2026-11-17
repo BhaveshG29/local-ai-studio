@@ -2,7 +2,7 @@
 {% block content %}
 <header class="page-head">
   <div>
-    <h1>Discover models</h1>
+    <h1>Model marketplace</h1>
     <p class="lead">Browse Hugging Face and the Ollama library. Only information is loaded here — nothing is downloaded until you press Download.</p>
   </div>
 </header>
@@ -14,7 +14,7 @@
 </nav>
 
 {% if tab == "hf" %}
-<form class="filters card" method="get" action="/discover" role="search">
+<form class="filters" method="get" action="/discover" role="search">
   <input type="hidden" name="tab" value="hf">
   <label class="field grow-2"><span>Search</span><input class="input" type="search" name="q" value="{{ q }}" placeholder="e.g. qwen, llama 3.2, whisper" accesskey="k" autofocus></label>
   <label class="field"><span>Task</span><select class="select" name="task">{% for o in hf_tasks %}<option value="{{ o.value }}" {% if o.selected %}selected{% endif %}>{{ o.label }}</option>{% endfor %}</select></label>
@@ -33,7 +33,7 @@
 {% endif %}
 {% if let Some(r) = hf_rate %}<p class="muted small">{{ r }}</p>{% endif %}
 {% if hf_cards.is_empty() && hf_error.is_none() %}
-<div class="empty card"><svg class="icon icon-xl" aria-hidden="true"><use href="/assets/icons.svg#search"></use></svg><p>No models match. Try a shorter search or fewer filters.</p></div>
+<div class="empty"><p>No models match. Try a shorter search or fewer filters.</p></div>
 {% endif %}
 <div class="grid grid-cards">
   {% for m in hf_cards %}
@@ -67,7 +67,7 @@
 {% if !ol_running %}
 <div class="notice notice-warn"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#alert"></use></svg><div><b>Ollama isn't running on this computer.</b> You can browse, but downloads need Ollama. See <a href="/settings#ollama">Settings → Ollama</a> for how to install or start it.</div></div>
 {% endif %}
-<form class="filters card" method="get" action="/discover" role="search">
+<form class="filters" method="get" action="/discover" role="search">
   <input type="hidden" name="tab" value="ollama">
   <label class="field grow-2"><span>Search</span><input class="input" type="search" name="q" value="{{ q }}" placeholder="e.g. llama, gemma, qwen" accesskey="k" autofocus></label>
   <label class="field"><span>Show</span><select class="select" name="cap">{% for o in ol_caps %}<option value="{{ o.value }}" {% if o.selected %}selected{% endif %}>{{ o.label }}</option>{% endfor %}</select></label>
@@ -81,7 +81,7 @@
 <div class="notice notice-info"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#info"></use></svg><div>ollama.com is unreachable — showing results saved {{ c }}.</div></div>
 {% endif %}
 {% if ol_cards.is_empty() && ol_error.is_none() %}
-<div class="empty card"><svg class="icon icon-xl" aria-hidden="true"><use href="/assets/icons.svg#search"></use></svg><p>No models match your search.</p></div>
+<div class="empty"><p>No models match your search.</p></div>
 {% endif %}
 <div class="grid grid-cards">
   {% for m in ol_cards %}
@@ -107,11 +107,11 @@
 {% endif %}
 
 {% if tab == "index" %}
-<section class="card">
+<section class="index-status">
   <div class="section-head">
     <div>
       <h2>Offline index</h2>
-      <p class="muted small">A searchable copy of model information seen in Discover, stored on this computer. Works without internet. Last updated: {{ ix_last }}.{% for c in ix_counts %} {{ c.1 }} from {{ c.0 }}.{% endfor %}</p>
+      <p class="muted small">A searchable copy of model information seen in the Marketplace, stored on this computer. Works without internet. Last updated: {{ ix_last }}.{% for c in ix_counts %} {{ c.1 }} from {{ c.0 }}.{% endfor %}</p>
     </div>
     <form method="post" action="/discover/index/refresh">
       <button class="btn" type="submit" {% if ix_running %}disabled{% endif %}><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#refresh"></use></svg>{% if ix_running %}Updating…{% else %}Update index{% endif %}</button>
@@ -124,7 +124,7 @@
   <ul class="small muted">{% for e in ix_errors %}<li>{{ e }}</li>{% endfor %}</ul>
   {% endif %}
 </section>
-<form class="filters card" method="get" action="/discover" role="search">
+<form class="filters" method="get" action="/discover" role="search">
   <input type="hidden" name="tab" value="index">
   <label class="field grow-2"><span>Search</span><input class="input" type="search" name="q" value="{{ q }}" placeholder="Search the offline index" accesskey="k" autofocus></label>
   <label class="field"><span>Source</span><select class="select" name="source">{% for o in ix_sources %}<option value="{{ o.value }}" {% if o.selected %}selected{% endif %}>{{ o.label }}</option>{% endfor %}</select></label>
@@ -133,10 +133,10 @@
   <div class="field field-actions"><button class="btn btn-primary" type="submit">Search</button></div>
 </form>
 {% if ix_rows.is_empty() %}
-<div class="empty card"><svg class="icon icon-xl" aria-hidden="true"><use href="/assets/icons.svg#disk"></use></svg><p>{% if ix_counts.is_empty() %}The index is empty. Press <b>Update index</b>, or browse the other tabs — what you see is added automatically.{% else %}Nothing in the index matches.{% endif %}</p></div>
+<div class="empty"><p>{% if ix_counts.is_empty() %}The index is empty. Press <b>Update index</b>, or browse the other tabs — what you see is added automatically.{% else %}Nothing in the index matches.{% endif %}</p></div>
 {% else %}
 <p class="muted small">{{ ix_total }} {% if ix_total == 1 %}result{% else %}results{% endif %}</p>
-<div class="table-wrap card">
+<div class="table-wrap">
 <table class="table">
   <thead><tr><th>Model</th><th>Source</th><th>Task</th><th>Size</th><th class="num">Downloads</th></tr></thead>
   <tbody>

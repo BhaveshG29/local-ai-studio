@@ -180,43 +180,188 @@ fn sinc(x: f64) -> f64 {
     }
 }
 
+/// Half-width of the resampling filter, in zero crossings of the sinc.
+const HALF_WIDTH: f64 = 16.0;
+/// Up to this many filter phases are worked out once and kept in a table; stranger rate
+/// pairs compute their weights as they go.
+const MAX_TABLE_PHASES: u64 = 4096;
+
+/// Weight of an input sample `d` input samples away from an output sample: a sinc low-pass
+/// at `cutoff` (relative to the input rate), shaped by a Blackman window.
+fn kernel(d: f64, cutoff: f64) -> f64 {
+    let t = d * cutoff;
+    let n = (t / HALF_WIDTH + 1.0) / 2.0;
+    if !(0.0..=1.0).contains(&n) {
+        return 0.0;
+    }
+    let window = 0.42 - 0.5 * (2.0 * std::f64::consts::PI * n).cos() + 0.08 * (4.0 * std::f64::consts::PI * n).cos();
+    cutoff * sinc(t) * window
+}
+
+fn gcd(a: u64, b: u64) -> u64 {
+    if b == 0 { a } else { gcd(b, a % b) }
+}
+
+/// Whether [`StreamResampler`] keeps a table of weights for this rate pair (every usual
+/// hardware rate has one). Other pairs, such as 8001 Hz, work out each weight as they go,
+/// which is hundreds of times slower.
+pub fn has_weight_table(from: u32, to: u32) -> bool {
+    let (from, to) = (from.max(1) as u64, to.max(1) as u64);
+    from == to || to / gcd(from, to) <= MAX_TABLE_PHASES
+}
+
 /// Band-limited resampling with a Blackman-windowed sinc kernel.
 pub fn resample(input: &[f32], from: u32, to: u32) -> Vec<f32> {
     if from == to || input.is_empty() {
         return input.to_vec();
     }
-    const HALF_WIDTH: i64 = 16;
-    let ratio = to as f64 / from as f64;
-    let cutoff = ratio.min(1.0) * 0.97;
-    let out_len = ((input.len() as f64) * ratio).round() as usize;
-    let window = |t: f64| {
-        // Blackman window over [-HALF_WIDTH, HALF_WIDTH]
-        let n = (t / HALF_WIDTH as f64 + 1.0) / 2.0;
-        if !(0.0..=1.0).contains(&n) {
-            0.0
-        } else {
-            0.42 - 0.5 * (2.0 * std::f64::consts::PI * n).cos() + 0.08 * (4.0 * std::f64::consts::PI * n).cos()
+    let mut r = StreamResampler::new(from, to);
+    let mut out = r.push(input);
+    out.extend(r.finish());
+    out
+}
+
+/// Resamples audio that arrives in pieces (a microphone sending a chunk every few hundred
+/// milliseconds). It keeps the few input samples the filter still needs between calls, so
+/// the result is exactly what [`resample`] gives for the whole recording at once: no clicks
+/// or gaps where the pieces meet. Memory use stays small however long the stream runs.
+pub struct StreamResampler {
+    from: u32,
+    to: u32,
+    /// `from / to` as a reduced fraction: output sample `i` sits at input position
+    /// `i * step / phases`.
+    step: u64,
+    phases: u64,
+    cutoff: f64,
+    /// The filter reaches this many input samples to each side.
+    half: i64,
+    /// Normalised weights, `2 * half + 1` per phase, when the rate pair has few phases.
+    table: Option<Vec<f32>>,
+    /// Input samples still needed, starting at absolute index `buf_start`.
+    buf: Vec<f32>,
+    buf_start: u64,
+    total_in: u64,
+    next_out: u64,
+}
+
+impl StreamResampler {
+    pub fn new(from: u32, to: u32) -> Self {
+        let (from64, to64) = (from.max(1) as u64, to.max(1) as u64);
+        let g = gcd(from64, to64);
+        let (step, phases) = (from64 / g, to64 / g);
+        let cutoff = (to64 as f64 / from64 as f64).min(1.0) * 0.97;
+        let half = (HALF_WIDTH / cutoff).ceil() as i64;
+        let taps = (2 * half + 1) as usize;
+        let table = (from != to && phases <= MAX_TABLE_PHASES).then(|| {
+            let mut t = Vec::with_capacity(phases as usize * taps);
+            for p in 0..phases {
+                let frac = p as f64 / phases as f64;
+                let w: Vec<f64> = (-half..=half).map(|j| kernel(frac - j as f64, cutoff)).collect();
+                let sum: f64 = w.iter().sum();
+                t.extend(w.iter().map(|v| (v / sum) as f32));
+            }
+            t
+        });
+        Self { from, to, step, phases, cutoff, half, table, buf: Vec::new(), buf_start: 0, total_in: 0, next_out: 0 }
+    }
+
+    /// Input rate (Hz).
+    pub fn from_rate(&self) -> u32 {
+        self.from
+    }
+
+    /// Output rate (Hz).
+    pub fn to_rate(&self) -> u32 {
+        self.to
+    }
+
+    /// Where output sample `i` falls in the input: the nearest input sample at or before it,
+    /// and the filter phase.
+    fn position(&self, i: u64) -> (i64, u64) {
+        let num = i as u128 * self.step as u128;
+        ((num / self.phases as u128) as i64, (num % self.phases as u128) as u64)
+    }
+
+    /// Adds input samples; returns the output samples that can be computed so far.
+    pub fn push(&mut self, input: &[f32]) -> Vec<f32> {
+        if self.from == self.to {
+            self.total_in += input.len() as u64;
+            return input.to_vec();
         }
-    };
-    let scale = (HALF_WIDTH as f64 / cutoff).ceil() as i64;
-    let mut out = Vec::with_capacity(out_len);
-    for i in 0..out_len {
-        let x = i as f64 / ratio;
-        let center = x.floor() as i64;
+        let mut out = Vec::with_capacity((input.len() as u64 * self.phases / self.step) as usize + 1);
+        // In blocks, so a whole recording never sits in the buffer twice.
+        for block in input.chunks(1 << 16) {
+            self.buf.extend_from_slice(block);
+            self.total_in += block.len() as u64;
+            loop {
+                let (center, phase) = self.position(self.next_out);
+                if center + self.half >= self.total_in as i64 {
+                    break;
+                }
+                out.push(self.sample(center, phase));
+                self.next_out += 1;
+            }
+            self.trim();
+        }
+        out
+    }
+
+    /// Ends the stream: returns the last samples (the filter treats what follows as absent).
+    /// The total output length is the input length times `to / from`, rounded.
+    pub fn finish(&mut self) -> Vec<f32> {
+        if self.from == self.to {
+            return Vec::new();
+        }
+        let total_out = ((self.total_in as f64) * (self.to as f64 / self.from as f64)).round() as u64;
+        let mut out = Vec::new();
+        while self.next_out < total_out {
+            let (center, phase) = self.position(self.next_out);
+            out.push(self.sample(center, phase));
+            self.next_out += 1;
+        }
+        self.buf.clear();
+        self.buf_start = self.total_in;
+        out
+    }
+
+    fn sample(&self, center: i64, phase: u64) -> f32 {
+        let (lo, hi) = (center - self.half, center + self.half);
+        let taps = (2 * self.half + 1) as usize;
+        if lo >= self.buf_start as i64
+            && hi < self.total_in as i64
+            && let Some(table) = &self.table
+        {
+            let w = &table[phase as usize * taps..(phase as usize + 1) * taps];
+            let start = (lo - self.buf_start as i64) as usize;
+            let s = &self.buf[start..start + taps];
+            return s.iter().zip(w).map(|(a, b)| *a as f64 * *b as f64).sum::<f64>() as f32;
+        }
+        // At the very start or end of the stream (or for rate pairs without a table): only
+        // the samples that exist count, and the weights are normalised over those.
+        let frac = phase as f64 / self.phases as f64;
         let mut acc = 0.0f64;
         let mut wsum = 0.0f64;
-        for k in (center - scale)..=(center + scale) {
-            if k < 0 || k as usize >= input.len() {
+        for k in lo.max(self.buf_start as i64)..=hi.min(self.total_in as i64 - 1) {
+            let Some(v) = self.buf.get((k - self.buf_start as i64) as usize) else {
                 continue;
-            }
-            let d = x - k as f64;
-            let wgt = cutoff * sinc(cutoff * d) * window(d * cutoff);
-            acc += input[k as usize] as f64 * wgt;
+            };
+            let wgt = kernel(frac + (center - k) as f64, self.cutoff);
+            acc += *v as f64 * wgt;
             wsum += wgt;
         }
-        out.push(if wsum.abs() > 1e-9 { (acc / wsum) as f32 } else { 0.0 });
+        if wsum.abs() > 1e-9 { (acc / wsum) as f32 } else { 0.0 }
     }
-    out
+
+    /// Forgets input samples no future output needs.
+    fn trim(&mut self) {
+        let (center, _) = self.position(self.next_out);
+        let keep_from = (center - self.half).max(0) as u64;
+        if keep_from > self.buf_start {
+            let n = ((keep_from - self.buf_start) as usize).min(self.buf.len());
+            self.buf.drain(..n);
+            self.buf_start += n as u64;
+        }
+    }
 }
 
 /// The ffmpeg executable to use, if any.
@@ -346,6 +491,97 @@ mod tests {
         // zero crossings ≈ 2 * 440 per second
         let crossings = out[..16_000].windows(2).filter(|w| (w[0] < 0.0) != (w[1] < 0.0)).count();
         assert!((crossings as i64 - 880).abs() <= 4, "crossings {crossings}");
+    }
+
+    /// The resampler as it was before it could stream: every weight computed on the spot.
+    fn reference_resample(input: &[f32], from: u32, to: u32) -> Vec<f32> {
+        let ratio = to as f64 / from as f64;
+        let cutoff = ratio.min(1.0) * 0.97;
+        let scale = (HALF_WIDTH / cutoff).ceil() as i64;
+        let out_len = ((input.len() as f64) * ratio).round() as usize;
+        (0..out_len)
+            .map(|i| {
+                let x = i as f64 / ratio;
+                let center = x.floor() as i64;
+                let (mut acc, mut wsum) = (0.0f64, 0.0f64);
+                for k in (center - scale)..=(center + scale) {
+                    if k < 0 || k as usize >= input.len() {
+                        continue;
+                    }
+                    let w = kernel(x - k as f64, cutoff);
+                    acc += input[k as usize] as f64 * w;
+                    wsum += w;
+                }
+                if wsum.abs() > 1e-9 { (acc / wsum) as f32 } else { 0.0 }
+            })
+            .collect()
+    }
+
+    /// Speech-like test signal: a few tones and a click.
+    fn test_signal(rate: u32, secs: f32) -> Vec<f32> {
+        let n = (rate as f32 * secs) as usize;
+        (0..n)
+            .map(|i| {
+                let t = i as f32 / rate as f32;
+                let tau = 2.0 * std::f32::consts::PI;
+                0.3 * (tau * 220.0 * t).sin() + 0.2 * (tau * 1375.0 * t).sin() + if i == n / 3 { 0.5 } else { 0.0 }
+            })
+            .collect()
+    }
+
+    #[test]
+    fn streaming_resampler_matches_resampling_everything_at_once() {
+        for (from, to) in [(48_000, 16_000), (44_100, 16_000), (8_000, 16_000), (22_050, 16_000), (16_000, 16_000)] {
+            let input = test_signal(from, 1.3);
+            let whole = resample(&input, from, to);
+            if from != to {
+                let reference = reference_resample(&input, from, to);
+                assert_eq!(whole.len(), reference.len(), "{from} → {to}");
+                let worst = whole.iter().zip(&reference).map(|(a, b)| (a - b).abs()).fold(0f32, f32::max);
+                assert!(worst < 1e-4, "{from} → {to}: differs from the reference by {worst}");
+            }
+            // Chunks of awkward, varying sizes (as a browser might send them), including empty ones.
+            let mut r = StreamResampler::new(from, to);
+            let mut streamed = Vec::new();
+            let mut pos = 0;
+            for size in [0usize, 1, 7, 4096, 333, 12_000, 1, 0, 9_999].iter().cycle() {
+                if pos >= input.len() {
+                    break;
+                }
+                let end = (pos + size).min(input.len());
+                streamed.extend(r.push(&input[pos..end]));
+                pos = end;
+            }
+            streamed.extend(r.finish());
+            assert_eq!(streamed.len(), whole.len(), "{from} → {to}");
+            let worst = streamed.iter().zip(&whole).map(|(a, b)| (a - b).abs()).fold(0f32, f32::max);
+            assert!(worst < 1e-5, "{from} → {to}: chunk joins differ by {worst}");
+        }
+    }
+
+    #[test]
+    fn streaming_resampler_keeps_little_memory() {
+        let mut r = StreamResampler::new(48_000, 16_000);
+        let chunk = test_signal(48_000, 0.25);
+        let mut produced = 0;
+        for _ in 0..400 {
+            produced += r.push(&chunk).len();
+            assert!(r.buf.len() < 1_000, "kept {} samples", r.buf.len());
+        }
+        produced += r.finish().len();
+        assert_eq!(produced, 400 * 4_000);
+    }
+
+    #[test]
+    fn usual_rates_have_a_weight_table() {
+        for rate in [8_000, 11_025, 12_000, 16_000, 22_050, 24_000, 32_000, 44_100, 48_000, 88_200, 96_000, 192_000] {
+            assert!(has_weight_table(rate, 16_000), "{rate} Hz");
+            assert_eq!(StreamResampler::new(rate, 16_000).table.is_some(), rate != 16_000, "{rate} Hz");
+        }
+        for rate in [8_001, 22_051, 191_999] {
+            assert!(!has_weight_table(rate, 16_000), "{rate} Hz");
+            assert!(StreamResampler::new(rate, 16_000).table.is_none(), "{rate} Hz");
+        }
     }
 
     #[test]

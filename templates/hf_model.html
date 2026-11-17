@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<nav class="crumbs" aria-label="Breadcrumb"><a href="/discover?tab=hf">Hugging Face</a><span aria-hidden="true">/</span><span>{{ author }}</span></nav>
+<nav class="crumbs" aria-label="Breadcrumb"><a href="/discover">Marketplace</a><span aria-hidden="true">/</span><a href="/discover?tab=hf">Hugging Face</a><span aria-hidden="true">/</span><span>{{ author }}</span></nav>
 <header class="page-head">
   <div>
     <h1 class="break">{{ name }}</h1>
@@ -89,7 +89,7 @@
   </section>
 </div>
 
-<details class="card disclosure" id="files">
+<details class="disclosure section-details" id="files">
   <summary><h2>Files ({{ files.len() }})</h2></summary>
   <div class="table-wrap">
   <table class="table compact">
@@ -100,7 +100,7 @@
 </details>
 
 {% if let Some(html) = readme_html %}
-<details class="card disclosure" open>
+<details class="disclosure section-details" open>
   <summary><h2>Model card</h2></summary>
   <div class="md readme">{{ html|safe }}</div>
   <p class="small muted">Written by the model's publisher. Model weights and their licenses belong to their publishers.</p>

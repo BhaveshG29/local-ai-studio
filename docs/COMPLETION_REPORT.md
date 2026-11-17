@@ -6,8 +6,8 @@ Local AI Studio is one Rust program that finds AI models on Hugging Face and in 
 library, downloads and verifies them, and runs them — with its built-in engine (Candle) or
 through Ollama — behind a browser interface made only of server-rendered HTML and CSS. It has
 chat with streaming answers, maths and code, image understanding through vision models, speech
-to text, image generation, a model library, a hardware dashboard, six themes and a local
-OpenAI-compatible API.
+to text, image generation, a model library, a hardware dashboard, two themes (Pure White and
+Pure Black) and a local OpenAI-compatible API.
 
 Everything below was observed, not assumed. The automated tests ran in a Linux container and
 on the developer's Ubuntu laptop. The app was then used end to end on that laptop against the
@@ -41,7 +41,7 @@ implemented or not verified · ❌ not implemented
 | Video generation, text to speech | ❌ | No practical Rust-native model; the interface never offers them |
 | Library: load, unload, rename, delete, inspect, import a `.gguf`, update | ✅ / ☑ | Live: listing, load state, sizes, sources; actions by tests |
 | Hardware dashboard | ✅ | Live: CPU and features, RAM, swap, RTX 4060 (8 GB) and Intel iGPU, disks, models in memory, which engine can use which hardware |
-| Six themes, remembered | ✅ | Live: switching saved to `config.toml`; tests |
+| Two themes (Pure White, Pure Black), remembered | ✅ | Live: switching saved to `config.toml`; older theme names still load; tests |
 | Settings | ✅ / ☑ | Live: cache clearing; validation by tests |
 | Local server: `127.0.0.1` by default, network access only with explicit opt-in and an access token, port conflicts, graceful shutdown | ✅ / ☑ | Live: three Ctrl+C restarts, each logged as “stopped cleanly”; the rest by tests |
 | Security: Host-header check, cross-site request blocking, CSP without scripts, path traversal, HTML escaping (including maths), token never written to disk, size limits | ☑ | Tests |
@@ -122,10 +122,13 @@ pages 11 · security 9 · server 7.
 
 ## 5. Main decisions
 
-- **No JavaScript at all**, as required. Actions are forms with redirects; menus use `<details>`;
-  dialogs use the `popover` attribute; live answers are streamed HTML; progress pages refresh
-  themselves; the Content-Security-Policy forbids scripts. Maths is converted to MathML on the
-  server because KaTeX/MathJax would need JavaScript.
+- **JavaScript only where HTML can't do the job.** Actions are forms with redirects; menus use
+  `<details>`; dialogs use the `popover` attribute; the sidebar is a CSS checkbox; live answers
+  are streamed HTML; progress pages refresh themselves. Recording the microphone and sending
+  Enter can't be done in HTML, so one small script (`assets/app.js`, approved for exactly
+  that) handles Enter-to-send and voice input; every page works without it, and the
+  Content-Security-Policy allows only that script. Maths is converted to MathML on the server
+  because KaTeX/MathJax would need JavaScript.
 - **Two engines behind one trait.** Candle is pure Rust and runs GGUF quantisations on any CPU;
   Ollama brings the GPU and formats Candle can't run. Every model page says which engine can run
   it, and nothing is labelled as GPU-accelerated unless it is.
@@ -198,3 +201,32 @@ git push origin v0.1.0
 
 The **Release** workflow builds the four platforms and attaches archives with SHA-256 checksums to
 a GitHub release.
+
+## 10. Version 0.4.0: the redesign and voice input
+
+**What changed.**
+- **Themes:** two themes, Pure White (the default) and Pure Black. The five others and their fonts are gone.
+- **Sidebar:** collapses to a rail with CSS only, and stays hidden while you chat.
+- **Enter to send:** Enter sends and Shift+Enter adds a new line.
+- **Voice input:** works in the chat and in a live panel on the new Speech models page. Whisper Base runs on this computer with Candle, and its card manages the download, loading and deleting.
+
+**How it was checked.**
+- Each part was built by one agent and reviewed by another, then four independent reviewers checked it: spec compliance, the browser script, server security, and end-to-end user flows.
+- A fixer resolved 22 of their 25 findings, including the one blocker and all major ones; the rest were nits.
+- Browser tests ran in headless Chrome with a fake microphone playing synthetic speech (flite). The real microphone was never used.
+- Results:
+  - Words appear as you speak, and Stop never sends.
+  - 35 s of continuous speech had a word error rate of 0.08.
+  - Silence and noise produce no text.
+- The full suite passes with `cargo fmt`, `cargo clippy -D warnings` and `cargo test`.
+
+**GPU (CUDA) check on an RTX 4060 Laptop with CUDA 12.9.** The CUDA toolkit was installed for this check. It found and fixed two GPU-only bugs:
+- **Live transcription failed:** "matmul is only supported for contiguous tensors". The cached Whisper decoder joined key/value tensors in a strided layout that the GPU's matrix multiply refuses. They are now made contiguous (`src/inference/whisper.rs`).
+- **Some chat answers came out in random languages** (2 of 12). The prompt is read on one thread and the answer written on another, and the GPU didn't wait for the first thread's work. The device is now synchronised at that hand-off (`src/inference/candle_llm.rs`): 0 of 18 answers were garbled afterwards.
+
+After both fixes, on the GPU:
+- Qwen2.5-0.5B answers in about 2 s.
+- Whisper Base loads in 0.2 s.
+- Live dictation and file transcription are word for word.
+
+**Not tested:** Firefox, Safari, Edge, real microphones and phones. The GitHub release builds for Linux and Windows run the built-in engine on the processor; build with `scripts/build.sh` for CUDA.

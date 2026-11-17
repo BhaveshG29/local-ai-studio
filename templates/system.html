@@ -15,8 +15,8 @@
 </header>
 
 <div class="grid-2">
-  <section class="card">
-    <h2><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#cpu"></use></svg>Computer</h2>
+  <section>
+    <h2>Computer</h2>
     <dl class="kv">
       <dt>System</dt><dd>{{ os }}</dd>
       {% if !kernel.is_empty() %}<dt>Kernel</dt><dd>{{ kernel }}</dd>{% endif %}
@@ -31,8 +31,8 @@
     {% endif %}
   </section>
 
-  <section class="card">
-    <h2><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#bolt"></use></svg>Memory</h2>
+  <section>
+    <h2>Memory</h2>
     <div class="meter-block">
       <div class="meter-label"><b>{{ ram.label }}</b><span>{{ ram.percent }}%</span></div>
       <progress class="bar bar-{{ ram.class }}" max="100" value="{{ ram.percent }}">{{ ram.percent }}%</progress>
@@ -42,8 +42,8 @@
   </section>
 </div>
 
-<section class="card">
-  <h2><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#server"></use></svg>Graphics</h2>
+<section>
+  <h2>Graphics</h2>
   {% if gpus.is_empty() %}
   <p>No graphics card was detected, so models run on the processor (CPU). That works, just more slowly — smaller models (1–4 B) are the most comfortable.</p>
   {% else %}
@@ -70,8 +70,8 @@
   </table></div>
 </section>
 
-<section class="card">
-  <h2><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#library"></use></svg>Models in memory</h2>
+<section>
+  <h2>Models in memory</h2>
   {% if loaded.is_empty() && whisper_loaded.is_empty() && image_loaded.is_empty() %}
   <p class="muted">No model is loaded. Models load when you first use them and are unloaded again after a while of not being used (see <a href="/settings#inference">Settings → Inference</a>).</p>
   {% else %}
@@ -95,8 +95,8 @@
   {% endif %}
 </section>
 
-<section class="card">
-  <h2><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#info"></use></svg>Which chat models fit?</h2>
+<section>
+  <h2>Which chat models fit?</h2>
   <p class="small muted">A rough guide for models in the common Q4_K_M format with a 4,000-token conversation. Real use depends on the model, its settings and what else is running — these are estimates, never a guarantee. Each model's page in your <a href="/library">Library</a> has a more exact estimate.</p>
   <div class="table-wrap"><table class="table compact">
     <thead><tr><th>Model size</th><th>For example</th><th class="num">Needs about</th><th>Memory (RAM)</th>{% if has_gpu_memory %}<th>Graphics memory</th>{% endif %}</tr></thead>
@@ -109,8 +109,8 @@
   {% if has_gpu_memory %}<p class="small muted">Ollama uses the graphics card automatically. The built-in engine uses it only when Local AI Studio was built with CUDA (see the table above).</p>{% endif %}
 </section>
 
-<section class="card">
-  <h2><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#disk"></use></svg>Storage</h2>
+<section>
+  <h2>Storage</h2>
   {% for d in disks %}
   <div class="meter-block">
     <div class="meter-label"><b class="break">{{ d.label }}</b><span>{{ d.percent }}%</span></div>
@@ -124,8 +124,8 @@
   </dl>
 </section>
 
-<section class="card">
-  <h2><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#power"></use></svg>Local AI Studio</h2>
+<section>
+  <h2>Local AI Studio</h2>
   <dl class="kv">
     <dt>Address</dt><dd class="mono">{{ server_url }}</dd>
     <dt>Running for</dt><dd>{{ uptime }}</dd>

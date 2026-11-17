@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<nav class="crumbs" aria-label="Breadcrumb"><a href="/discover?tab=ollama">Ollama library</a><span aria-hidden="true">/</span><span>{{ name }}</span></nav>
+<nav class="crumbs" aria-label="Breadcrumb"><a href="/discover">Marketplace</a><span aria-hidden="true">/</span><a href="/discover?tab=ollama">Ollama library</a><span aria-hidden="true">/</span><span>{{ name }}</span></nav>
 <header class="page-head">
   <div>
     <h1 class="break">{{ name }}</h1>
@@ -22,7 +22,7 @@
 </div>
 {% endif %}
 
-<section class="card">
+<section>
   <div class="section-head"><h2>Versions</h2><span class="muted small">Smaller versions are faster and need less memory; larger ones are smarter.</span></div>
   <div class="table-wrap">
   <table class="table">

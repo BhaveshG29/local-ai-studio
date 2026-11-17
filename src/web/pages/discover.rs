@@ -226,7 +226,7 @@ pub async fn page(State(state): State<SharedState>, headers: HeaderMap, Query(q)
     let cap = q.cap.clone().unwrap_or_default();
     let source = q.source.clone().unwrap_or_default();
     let index_progress = state.index.get();
-    let mut ctx = PageCtx::new(&state, &headers, "Discover models", "discover").at("/discover");
+    let mut ctx = PageCtx::new(&state, &headers, "Marketplace", "discover").at("/discover");
     if tab == "index" && index_progress.running {
         ctx = ctx.with_refresh(Some(2));
     }

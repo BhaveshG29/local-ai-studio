@@ -12,6 +12,9 @@ use crate::config::Theme;
 use crate::error::ErrorInfo;
 
 pub const FLASH_COOKIE: &str = "las_flash";
+/// Remembers that the sidebar was hidden when the last chat message was sent: chat pages then
+/// start with it hidden (a reload after each message would otherwise bring it back).
+pub const SIDEBAR_COOKIE: &str = "las_sidebar";
 
 #[derive(Clone, Debug)]
 pub struct Flash {
@@ -26,19 +29,24 @@ pub struct PageCtx {
     pub title: String,
     pub nav: &'static str,
     pub theme: &'static str,
-    pub theme_label: &'static str,
     pub dark: bool,
     pub flash: Option<Flash>,
     pub active_downloads: usize,
     pub generating: usize,
     pub version: &'static str,
-    /// Content hash of the stylesheets, for cache-busting their URLs.
+    /// Content hash of the stylesheets and the script, for cache-busting their URLs.
     pub css_rev: &'static str,
     /// Auto-refresh interval (seconds) for pages showing live progress.
     pub refresh: Option<u32>,
     pub network_exposed: bool,
+    /// Both themes, for the choice in Settings → Appearance.
     pub themes: Vec<ThemeOption>,
+    /// The theme the sidebar's one-click switch changes to.
+    pub other_theme: ThemeOption,
+    /// Where the page lives, so a form (such as the theme switch) can come back to it.
     pub current_path: String,
+    /// Chat pages start with the sidebar collapsed to its rail (see `SIDEBAR_COOKIE`).
+    pub sidebar_collapsed: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -46,8 +54,13 @@ pub struct ThemeOption {
     pub slug: &'static str,
     pub label: &'static str,
     pub description: &'static str,
-    pub dark: bool,
     pub active: bool,
+}
+
+impl ThemeOption {
+    fn of(t: Theme, current: Theme) -> Self {
+        Self { slug: t.slug(), label: t.label(), description: t.description(), active: t == current }
+    }
 }
 
 impl PageCtx {
@@ -58,7 +71,6 @@ impl PageCtx {
             title: title.to_string(),
             nav,
             theme: theme.slug(),
-            theme_label: theme.label(),
             dark: theme.is_dark(),
             flash: read_flash(headers),
             active_downloads: state.downloads.active_count(),
@@ -67,17 +79,10 @@ impl PageCtx {
             css_rev: crate::web::assets::stylesheet_rev(),
             refresh: None,
             network_exposed: state.server.addr().map(|a| !a.ip().is_loopback()).unwrap_or(false),
-            themes: Theme::ALL
-                .iter()
-                .map(|t| ThemeOption {
-                    slug: t.slug(),
-                    label: t.label(),
-                    description: t.description(),
-                    dark: t.is_dark(),
-                    active: *t == theme,
-                })
-                .collect(),
+            themes: Theme::ALL.iter().map(|t| ThemeOption::of(*t, theme)).collect(),
+            other_theme: ThemeOption::of(theme.other(), theme),
             current_path: String::new(),
+            sidebar_collapsed: nav == "chat" && cookie(headers, SIDEBAR_COOKIE) == Some("collapsed"),
         }
     }
 
@@ -96,14 +101,29 @@ impl PageCtx {
     }
 }
 
-fn read_flash(headers: &HeaderMap) -> Option<Flash> {
-    let raw = headers
+/// A cookie's raw value.
+fn cookie<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
+    headers
         .get_all(header::COOKIE)
         .iter()
         .filter_map(|v| v.to_str().ok())
         .flat_map(|v| v.split(';'))
         .map(str::trim)
-        .find_map(|kv| kv.strip_prefix(FLASH_COOKIE).and_then(|r| r.strip_prefix('=')))?;
+        .find_map(|kv| kv.strip_prefix(name).and_then(|r| r.strip_prefix('=')))
+}
+
+/// Sets `SIDEBAR_COOKIE` (the sidebar is hidden) or clears it. Sent with the answer to every
+/// chat message, which carries the sidebar's checkbox.
+pub fn sidebar_cookie(collapsed: bool) -> HeaderValue {
+    if collapsed {
+        HeaderValue::from_static("las_sidebar=collapsed; Path=/; Max-Age=31536000; SameSite=Strict; HttpOnly")
+    } else {
+        HeaderValue::from_static("las_sidebar=; Path=/; Max-Age=0; SameSite=Strict; HttpOnly")
+    }
+}
+
+fn read_flash(headers: &HeaderMap) -> Option<Flash> {
+    let raw = cookie(headers, FLASH_COOKIE)?;
     let decoded = percent_encoding::percent_decode_str(raw).decode_utf8().ok()?;
     let (kind, message) = decoded.split_once('|')?;
     let kind = match kind {
@@ -222,6 +242,15 @@ mod tests {
         let f = read_flash(&h).unwrap();
         assert_eq!(f.kind, "ok");
         assert_eq!(f.message, "Saved — all good ✓");
+    }
+
+    #[test]
+    fn cookies_are_found_by_their_whole_name() {
+        let mut h = HeaderMap::new();
+        h.insert(header::COOKIE, HeaderValue::from_static("las_sidebarx=1; las_sidebar=collapsed; las_flash=ok%7Chi"));
+        assert_eq!(cookie(&h, SIDEBAR_COOKIE), Some("collapsed"));
+        assert_eq!(cookie(&h, FLASH_COOKIE), Some("ok%7Chi"));
+        assert_eq!(cookie(&h, "nothing"), None);
     }
 
     #[test]

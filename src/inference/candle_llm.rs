@@ -395,11 +395,19 @@ impl LoadedLlm {
             pos += chunk.len();
             self.cached.extend_from_slice(chunk);
         }
-        let prompt_ms = started.elapsed().as_millis() as u64;
         let logits = logits.context("no logits produced")?;
+        // The answer is written on other threads (below), and the next prompt may be read on
+        // yet another. A GPU runs work queued from one thread without waiting for work queued
+        // from another, so each side waits for its own work first. Without this, CUDA builds
+        // wrote some answers from a half-written KV cache: replies in random languages.
+        self.device.synchronize()?;
+        let prompt_ms = started.elapsed().as_millis() as u64;
         // Writing the answer: one small step per token, on the fastest cores.
-        let (generated, stop) =
-            super::threads::generating(|| self.decode(logits, prompt_ids, params, cancel, on_text, ctx, pos))?;
+        let (generated, stop) = super::threads::generating(|| -> Result<_> {
+            let out = self.decode(logits, prompt_ids, params, cancel, on_text, ctx, pos)?;
+            self.device.synchronize()?;
+            Ok(out)
+        })?;
         Ok(GenOutcome {
             prompt_tokens: prompt_ids.len(),
             completion_tokens: generated,

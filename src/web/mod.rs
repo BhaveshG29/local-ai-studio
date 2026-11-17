@@ -6,6 +6,7 @@ pub mod assets;
 pub mod page;
 pub mod pages;
 pub mod security;
+pub mod speech;
 pub mod streaming;
 
 use std::net::{IpAddr, SocketAddr};
@@ -62,13 +63,26 @@ pub fn router(state: SharedState) -> Router {
         .route("/create/{id}/cancel", post(create::cancel))
         .route("/create/{id}/delete", post(create::delete))
         .route("/create/{id}/save", post(create::save_to_folder))
-        // Speech to text
+        // Speech models: Whisper Base, the live panel and transcribing recordings
         .route("/transcribe", get(transcribe::page).post(transcribe::start).layer(uploads_limit))
         .route("/transcribe/{id}", get(transcribe::detail))
         .route("/transcribe/{id}/cancel", post(transcribe::cancel))
         .route("/transcribe/{id}/delete", post(transcribe::delete))
         .route("/transcribe/{id}/export", get(transcribe::export))
         .route("/transcribe/{id}/to-chat", post(transcribe::to_chat))
+        // Voice input with Whisper Base: the Speech page's buttons and the live API
+        .route("/speech/whisper-base/download", post(speech::download))
+        .route("/speech/whisper-base/cancel", post(speech::cancel))
+        .route("/speech/whisper-base/load", post(speech::load))
+        .route("/speech/whisper-base/unload", post(speech::unload))
+        .route("/speech/whisper-base/delete", post(speech::delete))
+        .route("/speech/whisper-base/progress", get(transcribe::whisper_progress))
+        .route("/api/speech/sessions", post(speech::start))
+        .route("/api/speech/sessions/{id}", get(speech::session).delete(speech::discard))
+        .route("/api/speech/sessions/{id}/audio", post(speech::audio))
+        .route("/api/speech/sessions/{id}/pause", post(speech::pause))
+        .route("/api/speech/sessions/{id}/resume", post(speech::resume))
+        .route("/api/speech/sessions/{id}/stop", post(speech::stop))
         // System & settings
         .route("/system", get(system::page))
         .route("/system/unload", post(system::unload))

@@ -4,6 +4,7 @@
 
 pub mod candle_llm;
 pub mod chat;
+pub mod dictation;
 pub mod diffusion;
 pub mod manager;
 pub mod params;

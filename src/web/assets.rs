@@ -1,4 +1,4 @@
-//! Static assets compiled into the binary (CSS, icons, fonts), served with ETags.
+//! Static assets compiled into the binary (CSS, the one script, icons, fonts), served with ETags.
 
 use std::sync::LazyLock;
 
@@ -21,16 +21,10 @@ macro_rules! asset {
 static ASSETS: &[Asset] = &[
     asset!("app.css", "text/css; charset=utf-8"),
     asset!("themes.css", "text/css; charset=utf-8"),
+    asset!("app.js", "text/javascript; charset=utf-8"),
     asset!("icons.svg", "image/svg+xml"),
     asset!("logo.svg", "image/svg+xml"),
     asset!("fonts/Inter.woff", "font/woff"),
-    asset!("fonts/Manrope.woff", "font/woff"),
-    asset!("fonts/IBMPlexSans.woff", "font/woff"),
-    asset!("fonts/SpaceGrotesk.woff", "font/woff"),
-    asset!("fonts/Orbitron.woff", "font/woff"),
-    asset!("fonts/Fraunces.woff", "font/woff"),
-    asset!("fonts/NunitoSans.woff", "font/woff"),
-    asset!("fonts/PlusJakartaSans.woff", "font/woff"),
     asset!("fonts/JetBrainsMono.woff", "font/woff"),
 ];
 
@@ -39,13 +33,13 @@ static ETAGS: LazyLock<Vec<String>> = LazyLock::new(|| {
     ASSETS.iter().map(|a| format!("\"{}\"", &hex::encode(sha2::Sha256::digest(a.bytes))[..16])).collect()
 });
 
-/// Changes whenever a stylesheet changes, so pages can link `app.css?v=…` and browsers
-/// never keep an outdated copy after an update.
+/// Changes whenever a stylesheet or the script changes, so pages can link `app.css?v=…`
+/// and `app.js?v=…` and browsers never keep an outdated copy after an update.
 pub fn stylesheet_rev() -> &'static str {
     static REV: LazyLock<String> = LazyLock::new(|| {
         use sha2::Digest;
         let mut h = sha2::Sha256::new();
-        for a in ASSETS.iter().filter(|a| a.path.ends_with(".css")) {
+        for a in ASSETS.iter().filter(|a| a.path.ends_with(".css") || a.path.ends_with(".js")) {
             h.update(a.bytes);
         }
         hex::encode(h.finalize())[..12].to_string()

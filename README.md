@@ -25,7 +25,8 @@ have it installed, which adds thousands more models.
 The built-in engine uses your graphics card when it can. Apple Silicon Macs use it through
 Metal out of the box, and NVIDIA cards through CUDA when you build the program with the
 included build script (see [GPU acceleration](#5-gpu-acceleration)). The interface is plain
-HTML and CSS without any JavaScript, so it works in every browser and stays fast.
+HTML and CSS, so it works in every browser and stays fast. One small script adds Enter-to-send
+and voice input; everything else works without it.
 
 ## 2. Download and run
 
@@ -167,13 +168,23 @@ AI Studio**.
   formulas.
 - Each chat has its own system prompt and generation settings (temperature, top-p, top-k,
   answer length, context length, seed).
+- Enter sends a message and Shift+Enter starts a new line.
+- Voice input: click the microphone at the right of the message box and speak. Whisper Base
+  turns what you say into text as you talk, on this computer. You can pause, resume and stop;
+  stopping never sends anything, so you can check and edit the text before you send it. Until
+  Whisper Base is downloaded, the microphone is crossed out and explains how to get it.
+- The sidebar folds into a slim rail of icons (on a phone, a menu) to give the chat the room.
+  It never reloads the page or interrupts an answer, and a chat remembers it while you write.
 
 ### Pictures, audio and video
 
 - Attach pictures for vision models such as Gemma 3, Llama 3.2 Vision or Qwen2.5-VL (these
   run through Ollama).
 - Audio is transcribed with a local Whisper model and handed to the chat model. The **Speech
-  to text** page also translates into English and exports TXT and SRT subtitles.
+  models** page also translates recordings into English and exports TXT and SRT subtitles.
+- The **Speech models** page manages Whisper Base, the model behind voice input: its size,
+  format, location and whether it is loaded, with Download, Load, Unload and Delete. Its live
+  transcription panel shows your words as you speak; copy them or save them as a text file.
 - For videos, evenly spaced frames go to a vision model and the sound is transcribed (this
   needs ffmpeg).
 
@@ -193,8 +204,8 @@ time, and can reuse the settings of any earlier image.
 
 ### Also included
 
-- Six themes that change the whole look, not just a colour: Midnight, Graphite, Neon
-  Cyberpunk, Pure Minimal, Warm Studio and Modern Glass.
+- Two themes, Pure White (the default) and Pure Black, chosen in Settings or switched with one
+  click at the bottom of the sidebar.
 - An OpenAI-compatible API for other programs on your computer (see
   [Configuration](#6-configuration)).
 - Optional access from other devices on your network, protected by an access token.
@@ -336,10 +347,14 @@ database and all assets. Requests are handled by [Axum](https://github.com/tokio
 Tokio, and pages are rendered on the server with [Askama](https://github.com/askama-rs/askama)
 templates, so the browser receives finished HTML and CSS.
 
-**An interface without JavaScript.** Actions are ordinary forms followed by a redirect.
-Menus are `<details>` elements, dialogs use the HTML `popover` attribute, and progress pages
-refresh themselves. Chat answers are streamed: the server keeps the page open and writes the
-answer into it as it is generated. The Content-Security-Policy forbids scripts entirely.
+**An interface that needs no JavaScript.** Actions are ordinary forms followed by a redirect.
+Menus are `<details>` elements, dialogs use the HTML `popover` attribute, the sidebar opens and
+closes with a CSS checkbox, and progress pages refresh themselves. Chat answers are streamed:
+the server keeps the page open and writes the answer into it as it is generated. One small
+script, `assets/app.js`, adds Enter-to-send and voice input: it records the microphone and
+sends the audio to the program, where Whisper Base (run with Candle) transcribes it. Every page
+works without the script, and the Content-Security-Policy allows no other script: nothing
+inline and nothing from elsewhere.
 
 **Model analysis.** A Hugging Face repository is analysed from its file list and metadata
 (GGUF headers, `config.json`, diffusers layouts) to decide what it can do, which engine can run
@@ -391,7 +406,7 @@ LAS_TEST_NETWORK=1                 cargo test --release --test real_models -- --
 `tests/real_models.rs` lists the others (Whisper and image generation). The results of the
 last full run are in [`docs/COMPLETION_REPORT.md`](docs/COMPLETION_REPORT.md).
 
-GitHub Actions runs only when you publish a version. Pushing a tag such as `v0.3.0` first
+GitHub Actions runs only when you publish a version. Pushing a tag such as `v0.4.0` first
 checks formatting and lints and runs the tests on Ubuntu, Windows, macOS on Apple Silicon (where
 it also checks that Metal is built in) and macOS on Intel. Only if all of that passes are the four
 downloads built and published on the Releases page. To run the checks without releasing, start

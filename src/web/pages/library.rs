@@ -303,6 +303,15 @@ async fn run_action(state: &SharedState, f: &ActionForm) -> AppResult<(Option<St
             Ok((None, format!("Renamed to \"{name}\".")))
         }
         ("delete", ModelRef::Local(id)) => {
+            // Voice input holds Whisper Base while a recording is open (even paused): deleting
+            // it would cut the recording off and lose what hasn't been transcribed yet.
+            if state.dictation.in_use()
+                && crate::inference::dictation::find_whisper_base(state).await.is_some_and(|m| m.row.id == *id)
+            {
+                return Err(AppError::conflict(
+                    "This model is being used for voice input right now. Stop the recording first, then delete it.",
+                ));
+            }
             state.inference.unload_local(id);
             let models_dir = state.settings().models_dir(&state.paths);
             crate::library::delete_model(&state.db, &models_dir, id, f.delete_files.is_some())
@@ -424,6 +433,9 @@ pub async fn detail(
     let mut license_excerpt = String::new();
     let mut parameters_text = String::new();
     let mut hf_href = String::new();
+    // Language models keep a context in memory and follow a chat template; speech and image
+    // models don't, so those facts are left out for them.
+    let mut is_llm = true;
     let (weights, layers, kv, hd, mctx) = match ModelRef::parse(&model_ref) {
         Some(ModelRef::Local(id)) => {
             let m = state
@@ -438,10 +450,13 @@ pub async fn detail(
             if let Some(t) = &a.tokenizer_kind {
                 facts.push(KeyVal { key: "Tokenizer", value: t.clone() });
             }
-            facts.push(KeyVal {
-                key: "Chat template",
-                value: if a.has_chat_template { "Included".into() } else { "Not included".into() },
-            });
+            is_llm = matches!(a.capability, Capability::Chat | Capability::Vision);
+            if is_llm {
+                facts.push(KeyVal {
+                    key: "Chat template",
+                    value: if a.has_chat_template { "Included".into() } else { "Not included".into() },
+                });
+            }
             if let Some(r) = &m.repo_id {
                 facts.push(KeyVal { key: "Repository", value: r.clone() });
                 hf_href = format!("/discover/hf/{r}");
@@ -490,7 +505,11 @@ pub async fn detail(
         None => return Err(AppError::bad_request("Invalid model reference.")),
     };
     let ctx_used = mctx.map(|c| c.min(ctx_len)).unwrap_or(ctx_len);
-    let est = estimate_llm_memory(weights, layers, kv, hd, ctx_used, 4);
+    let mut est = estimate_llm_memory(weights, layers, kv, hd, ctx_used, 4);
+    if !is_llm {
+        est.total -= est.kv_cache;
+        est.kv_cache = 0;
+    }
     let (fit, fit_msg) = assess_fit(est.total, snap.available_ram, snap.total_ram);
     let gpu_msg = match snap.best_gpu_free() {
         Some(free) if est.total > free => format!(
@@ -503,12 +522,15 @@ pub async fn detail(
         }
         None => "No dedicated GPU memory detected.".into(),
     };
-    let memory = vec![
-        KeyVal { key: "Weights", value: human_bytes(est.weights) },
-        KeyVal { key: "Context memory", value: format!("{} for {ctx_used} tokens", human_bytes(est.kv_cache)) },
-        KeyVal { key: "Overhead", value: human_bytes(est.overhead) },
-        KeyVal { key: "Estimated total", value: human_bytes(est.total) },
-    ];
+    let mut memory = vec![KeyVal { key: "Weights", value: human_bytes(est.weights) }];
+    if is_llm {
+        memory.push(KeyVal {
+            key: "Context memory",
+            value: format!("{} for {ctx_used} tokens", human_bytes(est.kv_cache)),
+        });
+    }
+    memory.push(KeyVal { key: "Overhead", value: human_bytes(est.overhead) });
+    memory.push(KeyVal { key: "Estimated total", value: human_bytes(est.total) });
     let title = item.name.clone();
     let ctx = PageCtx::new(&state, &headers, &title, "library").at(&format!("/library/model/{model_ref}"));
     let fit_class = match fit {

@@ -23,33 +23,29 @@
   </nav>
 
   <div class="settings-body">
-    <section class="card settings-section" id="appearance">
+    <section class="settings-section" id="appearance">
       <h2>Appearance</h2>
-      <p class="muted small">Pick a look. It changes right away and is remembered.</p>
-      <div class="theme-grid">
+      <div class="theme-options" role="group" aria-label="Theme">
         {% for t in ctx.themes %}
         <form method="post" action="/settings/theme">
           <input type="hidden" name="theme" value="{{ t.slug }}">
           <input type="hidden" name="back" value="/settings#appearance">
-          <button type="submit" class="theme-card{% if t.active %} is-active{% endif %}" data-theme="{{ t.slug }}" aria-pressed="{% if t.active %}true{% else %}false{% endif %}">
-            <span class="tp" aria-hidden="true">
-              <span class="tp-side"><i></i><i></i><i></i></span>
-              <span class="tp-main"><span class="tp-bubble"></span><span class="tp-bubble tp-me"></span><span class="tp-btn"></span></span>
-            </span>
-            <span class="theme-card-name">{{ t.label }}{% if t.active %} <svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#check"></use></svg>{% endif %}</span>
-            <span class="theme-card-desc">{{ t.description }}</span>
-            <span class="theme-card-mode">{% if t.dark %}Dark{% else %}Light{% endif %}</span>
+          <button type="submit" class="theme-option" aria-pressed="{% if t.active %}true{% else %}false{% endif %}" title="{{ t.description }}">
+            <span class="theme-swatch" data-theme="{{ t.slug }}" aria-hidden="true"></span>
+            <span class="grow">{{ t.label }}</span>
+            {% if t.active %}<svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#check"></use></svg>{% endif %}
           </button>
         </form>
         {% endfor %}
       </div>
-      <form method="post" action="/settings/save/ui" class="stack">
-        <label class="check"><input type="checkbox" name="restore_last_chat" {% if s.ui.restore_last_chat %}checked{% endif %}> Open my last chat when I click <b>Chat</b></label>
+      <p class="small muted">Your choice is saved on this computer.</p>
+      <form method="post" action="/settings/save/ui" class="stack sep-top">
+        <label class="check"><input type="checkbox" name="restore_last_chat" {% if s.ui.restore_last_chat %}checked{% endif %}> <span>Open my last chat when I click <b>Chats</b></span></label>
         <div><button class="btn btn-primary" type="submit">Save</button></div>
       </form>
     </section>
 
-    <section class="card settings-section" id="storage">
+    <section class="settings-section" id="storage">
       <h2>Storage</h2>
       <p class="small muted">Models use <b>{{ models_size }}</b> · <b>{{ free_space }}</b> free on that drive.</p>
       <form method="post" action="/settings/save/storage" class="stack">
@@ -63,7 +59,7 @@
       </form>
     </section>
 
-    <section class="card settings-section" id="huggingface">
+    <section class="settings-section" id="huggingface">
       <h2>Hugging Face</h2>
       <p class="small muted">Most models download without an account. Some (“gated”) models, such as Llama and Gemma, need you to accept their license on huggingface.co and add an access token here.</p>
       <div class="status-line">
@@ -95,7 +91,7 @@
       </form>
     </section>
 
-    <section class="card settings-section" id="ollama">
+    <section class="settings-section" id="ollama">
       <h2>Ollama</h2>
       <p class="small muted">Ollama is a separate free app that runs many models (including ones that see images) and can use your graphics card. Local AI Studio works with or without it.</p>
       <div class="status-line">
@@ -118,7 +114,7 @@
       </form>
     </section>
 
-    <section class="card settings-section" id="inference">
+    <section class="settings-section" id="inference">
       <h2>Inference</h2>
       <form method="post" action="/settings/save/inference" class="stack">
         <label class="field"><span>When a model can run in both engines</span>
@@ -139,7 +135,7 @@
       </form>
     </section>
 
-    <section class="card settings-section" id="generation">
+    <section class="settings-section" id="generation">
       <h2>Chat defaults</h2>
       <p class="small muted">New chats start with these. Each chat can change them in its <b>Chat settings</b>.</p>
       <form method="post" action="/settings/save/generation" class="stack">
@@ -157,7 +153,7 @@
       </form>
     </section>
 
-    <section class="card settings-section" id="server">
+    <section class="settings-section" id="server">
       <h2>Server</h2>
       <p class="small muted">Local AI Studio is a small web server on this computer. Right now it answers at <span class="mono">{{ server_url }}</span>.</p>
       {% if show_token %}
@@ -175,7 +171,7 @@
       </form>
     </section>
 
-    <section class="card settings-section" id="media">
+    <section class="settings-section" id="media">
       <h2>Media</h2>
       <p class="small">
         {% if ffmpeg_found.is_empty() %}<span class="badge badge-muted">ffmpeg not found</span> Video in chats and transcribing videos need ffmpeg. {{ ffmpeg_hint }}
@@ -189,7 +185,7 @@
       </form>
     </section>
 
-    <section class="card settings-section" id="logging">
+    <section class="settings-section" id="logging">
       <h2>Logging</h2>
       <form method="post" action="/settings/save/logging" class="stack">
         <label class="field narrow"><span>Detail level</span>
@@ -201,7 +197,7 @@
       </form>
     </section>
 
-    <section class="card settings-section" id="data">
+    <section class="settings-section" id="data">
       <h2>Data &amp; cache</h2>
       <dl class="kv">
         <dt>Conversations</dt><dd>{{ conversation_count }}</dd>
@@ -214,14 +210,14 @@
         <div class="action-row"><div><b>Download all conversations</b><p class="small muted">One JSON file you can import again.</p></div><form method="post" action="/settings/data/export-all"><button class="btn" type="submit"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#download"></use></svg>Download</button></form></div>
         <div class="action-row"><div><b>Open the data folder</b><p class="small muted">Where conversations, uploads and settings live.</p></div><form method="post" action="/settings/data/open-data"><button class="btn" type="submit"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#folder"></use></svg>Open</button></form></div>
         <div class="action-row"><div><b>Clear the web cache</b><p class="small muted">Saved model lists and pages. They are fetched again when needed.</p></div><form method="post" action="/settings/data/clear-cache"><button class="btn" type="submit">Clear</button></form></div>
-        <div class="action-row"><div><b>Clear the offline index</b><p class="small muted">The searchable list built on Discover → Offline index.</p></div><form method="post" action="/settings/data/clear-index"><button class="btn" type="submit">Clear</button></form></div>
+        <div class="action-row"><div><b>Clear the offline index</b><p class="small muted">The searchable list built in Marketplace → Offline index.</p></div><form method="post" action="/settings/data/clear-index"><button class="btn" type="submit">Clear</button></form></div>
         <div class="action-row"><div><b>Delete unused uploads</b><p class="small muted">Files no conversation or transcript uses any more.</p></div><form method="post" action="/settings/data/clear-uploads"><button class="btn" type="submit">Delete</button></form></div>
         <div class="action-row"><div><b>Delete all conversations</b><p class="small muted">Can't be undone. Download them first if unsure.</p></div><button type="button" class="btn btn-danger" popovertarget="confirm-del-convs">Delete all…</button></div>
         <div class="action-row"><div><b>Reset all settings</b><p class="small muted">Back to the defaults. Models and conversations are kept.</p></div><button type="button" class="btn btn-ghost danger" popovertarget="confirm-reset">Reset…</button></div>
       </div>
     </section>
 
-    <section class="card settings-section" id="about">
+    <section class="settings-section" id="about">
       <h2>About</h2>
       <dl class="kv">
         <dt>Version</dt><dd>{{ ctx.version }}</dd>

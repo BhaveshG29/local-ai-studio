@@ -40,17 +40,17 @@ async fn cross_site_posts_are_blocked() {
                 Request::post("/settings/theme")
                     .header(h, v)
                     .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-                    .body(Body::from("theme=neon"))
+                    .body(Body::from("theme=black"))
                     .unwrap(),
             )
             .await;
         assert_eq!(r.status, StatusCode::FORBIDDEN, "{h}: {v} was allowed");
     }
-    assert_eq!(app.state.settings().ui.theme.slug(), "midnight", "a blocked request changed settings");
+    assert_eq!(app.state.settings().ui.theme.slug(), "white", "a blocked request changed settings");
     // The same request from our own page works.
-    let r = app.post_form("/settings/theme", &[("theme", "neon")]).await;
+    let r = app.post_form("/settings/theme", &[("theme", "black")]).await;
     assert_eq!(r.status, StatusCode::SEE_OTHER);
-    assert_eq!(app.state.settings().ui.theme.slug(), "neon");
+    assert_eq!(app.state.settings().ui.theme.slug(), "black");
 }
 
 #[tokio::test]
@@ -58,8 +58,16 @@ async fn security_headers_are_set() {
     let app = TestApp::new();
     let r = app.get("/").await;
     let h = |n: &str| r.headers.get(n).and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
-    assert!(h("content-security-policy").contains("script-src 'none'"));
-    assert!(h("content-security-policy").contains("frame-ancestors 'self'"));
+    let csp = h("content-security-policy");
+    // Scripts only from the app's own files: no inline code, no eval, nothing from other sites.
+    let directive = |name: &str| csp.split(';').map(str::trim).find(|d| d.split(' ').next() == Some(name));
+    assert_eq!(directive("script-src"), Some("script-src 'self'"), "{csp}");
+    assert_eq!(directive("default-src"), Some("default-src 'self'"), "{csp}");
+    assert_eq!(directive("object-src"), Some("object-src 'none'"), "{csp}");
+    assert!(!csp.contains("unsafe-eval"), "{csp}");
+    assert!(csp.contains("frame-ancestors 'self'"));
+    // The microphone is allowed for this app only (voice input); nothing else is.
+    assert_eq!(h("permissions-policy"), "camera=(), microphone=(self), geolocation=(), payment=(), usb=()");
     assert_eq!(h("x-content-type-options"), "nosniff");
     assert_eq!(h("x-frame-options"), "SAMEORIGIN");
     assert_eq!(h("referrer-policy"), "same-origin");

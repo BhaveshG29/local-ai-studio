@@ -2,7 +2,7 @@
 {% block content %}
 <header class="page-head">
   <div>
-    <h1>Library</h1>
+    <h1>Model library</h1>
     <p class="lead">{{ total_count }} {% if total_count == 1 %}model{% else %}models{% endif %} · {{ total_size }} on disk</p>
   </div>
   <div class="cluster">
@@ -36,15 +36,14 @@
 </div>
 
 {% if rows.is_empty() %}
-<div class="empty card">
-  <svg class="icon icon-xl" aria-hidden="true"><use href="/assets/icons.svg#library"></use></svg>
-  <p>{% if total_count == 0 %}Your library is empty. Download a model from Discover to get started.{% else %}No models match this filter.{% endif %}</p>
-  <a class="btn btn-primary" href="/discover">Discover models</a>
+<div class="empty">
+  <p>{% if total_count == 0 %}Your library is empty. Download a model from the Marketplace to get started.{% else %}No models match this filter.{% endif %}</p>
+  <a class="btn btn-primary" href="/discover">Open the Marketplace</a>
 </div>
 {% else %}
 <div class="lib-list">
   {% for r in rows %}
-  <article class="card lib-item{% if !r.runnable %} is-problem{% endif %}">
+  <article class="lib-item{% if !r.runnable %} is-problem{% endif %}">
     <div class="lib-main">
       <div class="lib-title">
         <a class="lib-name break" href="{{ r.href }}">{{ r.name }}</a>

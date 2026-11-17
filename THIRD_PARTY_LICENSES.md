@@ -10,22 +10,15 @@ All bundled fonts are licensed under the SIL Open Font License 1.1.
 
 | Font | Copyright |
 |---|---|
-| Fraunces | Copyright 2018 The Fraunces Project Authors (https://github.com/undercasetype/Fraunces) |
-| IBMPlexSans | Copyright © 2017 IBM Corp. with Reserved Font Name "Plex" |
 | Inter | Copyright 2020 The Inter Project Authors (https://github.com/rsms/inter) |
 | JetBrainsMono | Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono) |
-| Manrope | Copyright 2018 The Manrope Project Authors (https://github.com/googlefonts/manrope) |
-| NunitoSans | Copyright 2016 The Nunito Sans Project Authors (https://github.com/Fonthausen/NunitoSans) |
-| Orbitron | Copyright 2018 The Orbitron Project Authors (https://github.com/theleagueof/orbitron), with Reserved Font Name: "Orbitron" |
-| PlusJakartaSans | Copyright 2020 The Plus Jakarta Sans Project Authors (https://github.com/tokotype/PlusJakartaSans) |
-| SpaceGrotesk | Copyright 2020 The Space Grotesk Project Authors (https://github.com/floriankarsten/space-grotesk) |
 
 ### SIL Open Font License 1.1
 
 ````text
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:
-http://scripts.sil.org/OFL
+https://scripts.sil.org/OFL
 
 
 -----------------------------------------------------------

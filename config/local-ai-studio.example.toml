@@ -23,8 +23,8 @@ open_browser = true
 allow_network = false
 
 [ui]
-# midnight | graphite | neon | minimal | warm | glass
-theme = "midnight"
+# white (black text on white) | black (white text on black)
+theme = "white"
 # Clicking "Chat" opens the most recent conversation.
 restore_last_chat = true
 

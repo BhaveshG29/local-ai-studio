@@ -79,7 +79,11 @@ pub struct ChatPage {
     pub messages: Vec<MsgView>,
     pub models: Vec<ModelChoice>,
     pub model_label: String,
+    /// The chat's model was chosen but is no longer available.
     pub model_missing: bool,
+    /// The chat's model is available: messages can be sent (no model, or a missing one,
+    /// turns Send and Enter off).
+    pub can_send: bool,
     pub model_vision: bool,
     pub engine_name: String,
     pub live: bool,
@@ -89,6 +93,11 @@ pub struct ChatPage {
     pub ffmpeg_available: bool,
     pub draft: String,
     pub live_marker: &'static str,
+    /// The composer's microphone (voice input with Whisper Base).
+    pub mic: crate::inference::dictation::MicView,
+    /// The microphone's pop-up offers to download Whisper Base: it isn't ready, isn't on disk
+    /// and isn't being downloaded (a paused or failed download resumes).
+    pub mic_download: bool,
 }
 
 fn attachment_view(a: &Attachment) -> AttachmentView {
@@ -239,9 +248,10 @@ async fn build_page(
         ),
     };
     let whisper_available = super::models_of_kind(state, "transcription").await.iter().any(|m| m.analysis.runnable);
-    let title_for_ctx = if conv.is_some() { title.clone() } else { "Chat".into() };
+    let title_for_ctx = if conv.is_some() { title.clone() } else { "New chat".into() };
+    // Without a conversation this is the new-chat page ("/chat" would open the latest chat).
     let ctx = PageCtx::new(state, headers, &title_for_ctx, "chat").at(&if current_id.is_empty() {
-        "/chat".to_string()
+        "/chat?new=1".to_string()
     } else {
         format!("/chat/{current_id}")
     });
@@ -250,6 +260,9 @@ async fn build_page(
     } else {
         state.chat.take_draft(&current_id).unwrap_or_default()
     };
+    let mic = crate::inference::dictation::mic_view(state).await;
+    let mic_download =
+        !mic.ready && !mic.downloading && !crate::inference::dictation::whisper_base_status(state).await.downloaded;
     let page = ChatPage {
         ctx: ctx.clone(),
         conversations: convs
@@ -272,6 +285,7 @@ async fn build_page(
             .map(|m| m.label.clone())
             .unwrap_or_else(|| if model_missing { "Model not available".into() } else { "No model selected".into() }),
         model_vision: selected_choice.map(|m| m.vision).unwrap_or(false),
+        can_send: selected_choice.is_some(),
         models,
         model_missing,
         engine_name,
@@ -282,6 +296,8 @@ async fn build_page(
         ffmpeg_available: crate::media::ffmpeg_path(&settings).is_some(),
         draft,
         live_marker: LIVE_MARKER,
+        mic,
+        mic_download,
     };
     Ok((ctx, page))
 }
@@ -349,6 +365,15 @@ struct ChatForm {
     model_ref: Option<String>,
     text: String,
     attachments: Vec<Attachment>,
+    /// The sidebar's checkbox (it belongs to the composer form): hidden while chatting.
+    sidebar_collapsed: bool,
+}
+
+/// Remembers whether the sidebar was hidden when the message was sent, so the chat page this
+/// answer leads to (a reload) keeps it that way.
+fn keep_sidebar(mut r: Response, collapsed: bool) -> Response {
+    r.headers_mut().append(header::SET_COOKIE, crate::web::page::sidebar_cookie(collapsed));
+    r
 }
 
 /// Streams one uploaded file to disk, checks its type by content and normalises images.
@@ -436,7 +461,7 @@ pub async fn save_upload(
 }
 
 async fn parse_chat_form(state: &SharedState, mut mp: Multipart) -> AppResult<ChatForm> {
-    let mut form = ChatForm { model_ref: None, text: String::new(), attachments: Vec::new() };
+    let mut form = ChatForm { model_ref: None, text: String::new(), attachments: Vec::new(), sidebar_collapsed: false };
     let uploads = state.paths.uploads_dir.clone();
     let result: AppResult<()> = async {
         while let Some(mut field) =
@@ -466,6 +491,9 @@ async fn parse_chat_form(state: &SharedState, mut mp: Multipart) -> AppResult<Ch
                 "model_ref" => {
                     let v = field.text().await.unwrap_or_default();
                     form.model_ref = (!v.trim().is_empty()).then(|| v.trim().to_string());
+                }
+                "sidebar" => {
+                    form.sidebar_collapsed = field.text().await.unwrap_or_default() == "collapsed";
                 }
                 _ => {
                     let _ = field.bytes().await;
@@ -523,7 +551,7 @@ async fn check_attachments(state: &SharedState, model_ref: &str, atts: &[Attachm
         && !super::models_of_kind(state, "transcription").await.iter().any(|m| m.analysis.runnable)
     {
         return Err(AppError::bad_request(
-            "Audio is turned into text by a Whisper model first. Download one (for example openai/whisper-base) from Discover, then attach the audio again.",
+            "Audio is turned into text by a Whisper model first. Download one (for example openai/whisper-base) from the Marketplace, then attach the audio again.",
         ));
     }
     Ok(())
@@ -595,13 +623,18 @@ pub async fn create(State(state): State<SharedState>, mp: Multipart) -> Response
         Ok(f) => f,
         Err(e) => return redirect_flash("/chat?new=1", "error", &e.user_message()),
     };
+    let collapsed = form.sidebar_collapsed;
+    keep_sidebar(create_chat(&state, form).await, collapsed)
+}
+
+async fn create_chat(state: &SharedState, form: ChatForm) -> Response {
     let Some(model_ref) = form.model_ref.clone().filter(|m| ModelRef::parse(m).is_some()) else {
-        remove_attachments(&state, &form.attachments).await;
+        remove_attachments(state, &form.attachments).await;
         state.chat.save_draft("new", &form.text);
         return redirect_flash(
             "/chat?new=1",
             "error",
-            "Choose a model first. If the list is empty, download one from Discover.",
+            "Choose a model first. If the list is empty, download one from the Marketplace.",
         );
     };
     let settings = state.settings();
@@ -622,7 +655,7 @@ pub async fn create(State(state): State<SharedState>, mp: Multipart) -> Response
     let has_content = !form.text.trim().is_empty() || !form.attachments.is_empty();
     if has_content {
         let text = form.text.clone();
-        if let Err(e) = add_user_message_and_start(&state, &conv.id, &model_ref, form).await {
+        if let Err(e) = add_user_message_and_start(state, &conv.id, &model_ref, form).await {
             // Don't leave an empty "New chat" behind: go back to the new-chat form with the
             // text and the chosen model kept.
             let id = conv.id.clone();
@@ -657,19 +690,22 @@ pub async fn send(State(state): State<SharedState>, Path(id): Path<String>, mp: 
         Ok(f) => f,
         Err(e) => return redirect_flash(&back, "error", &e.user_message()),
     };
+    let collapsed = form.sidebar_collapsed;
     let Some(model_ref) = conv.model_ref.clone() else {
         state.chat.save_draft(&id, &form.text);
         remove_attachments(&state, &form.attachments).await;
-        return redirect_flash(&back, "error", "Choose a model for this chat first (Chat settings).");
+        let r = redirect_flash(&back, "error", "Choose a model for this chat first (Chat settings).");
+        return keep_sidebar(r, collapsed);
     };
     let text = form.text.clone();
-    match add_user_message_and_start(&state, &id, &model_ref, form).await {
+    let r = match add_user_message_and_start(&state, &id, &model_ref, form).await {
         Ok(()) => redirect(&format!("{back}#bottom")),
         Err(e) => {
             state.chat.save_draft(&id, &text);
             redirect_flash(&back, "error", &e.user_message())
         }
-    }
+    };
+    keep_sidebar(r, collapsed)
 }
 
 pub async fn stop(State(state): State<SharedState>, headers: HeaderMap, Path(id): Path<String>) -> Response {

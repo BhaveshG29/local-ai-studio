@@ -75,61 +75,69 @@ impl AppPaths {
     }
 }
 
-/// The six UI themes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+/// The two UI themes. They differ only in colour: black on white, or white on black.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum Theme {
     #[default]
-    Midnight,
-    Graphite,
-    Neon,
-    Minimal,
-    Warm,
-    Glass,
+    White,
+    Black,
 }
 
 impl Theme {
-    pub const ALL: [Theme; 6] =
-        [Theme::Midnight, Theme::Graphite, Theme::Neon, Theme::Minimal, Theme::Warm, Theme::Glass];
+    pub const ALL: [Theme; 2] = [Theme::White, Theme::Black];
 
     pub fn slug(self) -> &'static str {
         match self {
-            Theme::Midnight => "midnight",
-            Theme::Graphite => "graphite",
-            Theme::Neon => "neon",
-            Theme::Minimal => "minimal",
-            Theme::Warm => "warm",
-            Theme::Glass => "glass",
+            Theme::White => "white",
+            Theme::Black => "black",
         }
     }
 
     pub fn label(self) -> &'static str {
         match self {
-            Theme::Midnight => "Midnight",
-            Theme::Graphite => "Graphite",
-            Theme::Neon => "Neon Cyberpunk",
-            Theme::Minimal => "Pure Minimal",
-            Theme::Warm => "Warm Studio",
-            Theme::Glass => "Modern Glass",
+            Theme::White => "Pure White",
+            Theme::Black => "Pure Black",
         }
     }
 
     pub fn description(self) -> &'static str {
         match self {
-            Theme::Midnight => "Night-sky indigo with a faint star field, moonlight blue and gold markers.",
-            Theme::Graphite => "Drafting-table charcoal on a faint grid. Square edges, chalk-white buttons.",
-            Theme::Neon => "Magenta and cyan neon on violet-black, with HUD corners and cut-edge buttons.",
-            Theme::Minimal => "White paper and black ink. Hairline borders and plenty of space.",
-            Theme::Warm => "Linen workspace, walnut sidebar, amber key-cap buttons and serif headings.",
-            Theme::Glass => "Frosted glass panels floating over a soft pastel aurora.",
+            Theme::White => "Black text on a white background.",
+            Theme::Black => "White text on a black background.",
         }
     }
 
     pub fn is_dark(self) -> bool {
-        matches!(self, Theme::Midnight | Theme::Graphite | Theme::Neon)
+        self == Theme::Black
+    }
+
+    /// The theme the one-click switch in the sidebar changes to.
+    pub fn other(self) -> Theme {
+        match self {
+            Theme::White => Theme::Black,
+            Theme::Black => Theme::White,
+        }
+    }
+
+    /// Reads the theme from `config.toml`, never failing: the six themes of earlier versions
+    /// become the closer of the two (the light ones white, the dark ones black), and anything
+    /// unknown becomes the default.
+    fn from_config(value: &str) -> Theme {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "black" | "midnight" | "graphite" | "neon" => Theme::Black,
+            _ => Theme::White,
+        }
     }
 }
 
+impl<'de> Deserialize<'de> for Theme {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        String::deserialize(deserializer).map(|s| Theme::from_config(&s))
+    }
+}
+
+/// Parses a theme chosen in the interface; only the two current names are accepted.
 impl FromStr for Theme {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -204,7 +212,7 @@ pub struct UiSettings {
 
 impl Default for UiSettings {
     fn default() -> Self {
-        Self { theme: Theme::Midnight, restore_last_chat: true }
+        Self { theme: Theme::White, restore_last_chat: true }
     }
 }
 
@@ -543,8 +551,8 @@ mod tests {
 
     #[test]
     fn partial_files_are_accepted() {
-        let s: Settings = toml::from_str("[ui]\ntheme = \"neon\"\n").unwrap();
-        assert_eq!(s.ui.theme, Theme::Neon);
+        let s: Settings = toml::from_str("[ui]\ntheme = \"black\"\n").unwrap();
+        assert_eq!(s.ui.theme, Theme::Black);
         assert_eq!(s.server.port, 8765);
     }
 
@@ -584,10 +592,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("config.toml");
         let mut s = Settings::default();
-        s.ui.theme = Theme::Glass;
+        s.ui.theme = Theme::Black;
         s.save(&path).unwrap();
         let loaded = Settings::load(&path).unwrap();
-        assert_eq!(loaded.ui.theme, Theme::Glass);
+        assert_eq!(loaded.ui.theme, Theme::Black);
     }
 
     #[test]
@@ -633,9 +641,52 @@ mod tests {
 
     #[test]
     fn theme_slugs_round_trip() {
+        assert_eq!(Theme::default(), Theme::White);
+        assert_eq!(Settings::default().ui.theme, Theme::White);
         for t in Theme::ALL {
             assert_eq!(t.slug().parse::<Theme>().unwrap(), t);
+            assert_eq!(t.to_string(), t.slug());
+            assert_eq!(t.other().other(), t);
+            assert_ne!(t.other(), t);
+            let mut s = Settings::default();
+            s.ui.theme = t;
+            let text = toml::to_string_pretty(&s).unwrap();
+            assert!(text.contains(&format!("theme = \"{}\"", t.slug())), "{text}");
+            assert_eq!(toml::from_str::<Settings>(&text).unwrap().ui.theme, t);
         }
+        assert!(Theme::Black.is_dark() && !Theme::White.is_dark());
+        // The interface only accepts the two current names.
         assert!("pink".parse::<Theme>().is_err());
+        assert!("midnight".parse::<Theme>().is_err());
+    }
+
+    /// Files written by earlier versions name one of six themes; they must still load.
+    #[test]
+    fn old_theme_names_still_load() {
+        let cases = [
+            ("minimal", Theme::White),
+            ("warm", Theme::White),
+            ("glass", Theme::White),
+            ("midnight", Theme::Black),
+            ("graphite", Theme::Black),
+            ("neon", Theme::Black),
+            ("pink", Theme::White),
+            ("", Theme::White),
+            ("white", Theme::White),
+            ("black", Theme::Black),
+        ];
+        for (old, new) in cases {
+            let s: Settings = toml::from_str(&format!("[ui]\ntheme = \"{old}\"\n")).unwrap();
+            assert_eq!(s.ui.theme, new, "theme = \"{old}\"");
+        }
+        // Loading and saving again writes the new name.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(&path, "[ui]\ntheme = \"graphite\"\nrestore_last_chat = false\n").unwrap();
+        let s = Settings::load(&path).unwrap();
+        assert_eq!(s.ui.theme, Theme::Black);
+        assert!(!s.ui.restore_last_chat, "the rest of the section is kept");
+        s.save(&path).unwrap();
+        assert!(std::fs::read_to_string(&path).unwrap().contains("theme = \"black\""));
     }
 }

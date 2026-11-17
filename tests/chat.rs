@@ -462,6 +462,86 @@ async fn library_actions_for_ollama_models() {
     assert!(ollama.state.models.lock().unwrap().is_empty());
 }
 
+/// The `las_sidebar` cookie a response sets, if any.
+fn sidebar_cookie(r: &Resp) -> Option<String> {
+    r.headers
+        .get_all(axum::http::header::SET_COOKIE)
+        .iter()
+        .filter_map(|v| v.to_str().ok())
+        .find(|v| v.starts_with("las_sidebar="))
+        .map(str::to_string)
+}
+
+/// The sidebar's checkbox on a page: `(checked, its form)`.
+fn nav_toggle(body: &str) -> (bool, Option<String>) {
+    let doc = scraper::Html::parse_document(body);
+    let input = doc.select(&scraper::Selector::parse("input#nav-toggle").unwrap()).next().expect("#nav-toggle");
+    // The phone menu (a popover drawer) always starts closed: nothing opens it on load.
+    assert!(doc.select(&scraper::Selector::parse("aside#sidebar[popover]").unwrap()).next().is_some());
+    (input.value().attr("checked").is_some(), input.value().attr("form").map(str::to_string))
+}
+
+async fn get_with_cookie(app: &TestApp, path: &str, cookie: &str) -> Resp {
+    let req = axum::http::Request::get(path)
+        .header(axum::http::header::COOKIE, cookie)
+        .body(axum::body::Body::empty())
+        .unwrap();
+    app.send(req).await
+}
+
+/// A sidebar hidden while chatting stays hidden: each message sent carries the sidebar's
+/// checkbox (it belongs to the composer form), and the chat pages that follow start the same
+/// way. No script is involved; other pages always start with the full sidebar.
+#[tokio::test]
+async fn a_hidden_sidebar_stays_hidden_while_chatting() {
+    let (app, ollama) = setup(&["completion"]).await;
+    ollama.set_reply(&["Fine."], Duration::from_millis(10));
+    let id = new_chat(&app, "Hello").await;
+    wait_idle(&app, &id).await;
+    let chat = format!("/chat/{id}");
+    assert_eq!(nav_toggle(&app.get(&chat).await.body), (false, Some("composer-form".into())));
+    let doc = scraper::Html::parse_document(&app.get(&chat).await.body);
+    let input = doc.select(&scraper::Selector::parse("input#nav-toggle").unwrap()).next().unwrap();
+    assert_eq!((input.value().attr("name"), input.value().attr("value")), (Some("sidebar"), Some("collapsed")));
+    assert_eq!(doc.select(&scraper::Selector::parse("form#composer-form").unwrap()).count(), 1);
+
+    // Sent with the sidebar hidden: remembered (a year, for this browser only).
+    let r = app.post_multipart(&format!("{chat}/send"), &[("text", "More"), ("sidebar", "collapsed")], &[]).await;
+    assert_eq!(r.status, StatusCode::SEE_OTHER);
+    let cookie = sidebar_cookie(&r).expect("no sidebar cookie");
+    assert!(cookie.starts_with("las_sidebar=collapsed;"), "{cookie}");
+    assert!(cookie.contains("HttpOnly") && cookie.contains("SameSite=Strict") && cookie.contains("Max-Age=31536000"));
+    wait_idle(&app, &id).await;
+    assert!(nav_toggle(&get_with_cookie(&app, &chat, "las_sidebar=collapsed").await.body).0);
+    assert!(nav_toggle(&get_with_cookie(&app, "/chat?new=1", "las_sidebar=collapsed").await.body).0);
+    // Other pages start with the full sidebar, and their checkbox belongs to no form.
+    for page in ["/", "/library", "/settings"] {
+        assert_eq!(
+            nav_toggle(&get_with_cookie(&app, page, "las_sidebar=collapsed").await.body),
+            (false, None),
+            "{page}"
+        );
+    }
+    assert!(!nav_toggle(&app.get(&chat).await.body).0);
+
+    // Sent with it shown: forgotten.
+    let r = app.post_multipart(&format!("{chat}/send"), &[("text", "Again")], &[]).await;
+    let cookie = sidebar_cookie(&r).expect("no sidebar cookie");
+    assert!(cookie.starts_with("las_sidebar=;") && cookie.contains("Max-Age=0"), "{cookie}");
+    wait_idle(&app, &id).await;
+    // A refused message says it too (the page comes back the same way).
+    let r = app.post_multipart(&format!("{chat}/send"), &[("text", "  "), ("sidebar", "collapsed")], &[]).await;
+    assert_eq!(r.flash().map(|f| f.0).as_deref(), Some("error"));
+    assert!(sidebar_cookie(&r).unwrap().starts_with("las_sidebar=collapsed;"));
+    // So does the new-chat form.
+    let r =
+        app.post_multipart("/chat/new", &[("model_ref", MODEL), ("text", "Hi"), ("sidebar", "collapsed")], &[]).await;
+    assert!(r.location().starts_with("/chat/"), "{:?}", r.flash());
+    assert!(sidebar_cookie(&r).unwrap().starts_with("las_sidebar=collapsed;"));
+    let new_id = r.location().trim_start_matches("/chat/").split('#').next().unwrap().to_string();
+    wait_idle(&app, &new_id).await;
+}
+
 /// A 1×1 red PNG.
 fn tiny_png() -> Vec<u8> {
     let mut img = image::RgbImage::new(1, 1);

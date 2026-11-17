@@ -1,0 +1,15 @@
+{#- The microphone at the right end of the chat composer's text box: voice input with Whisper
+    Base, recorded by assets/app.js and transcribed by the app. Needs `mic` (MicView).
+    * Whisper Base isn't ready: a microphone with a red cross. It never records; its title and
+      pop-up (#mic-help, no script needed) say why and what to do.
+    * Ready: starts and stops recording (its name says which). The pause button left of it
+      shows while recording (it comes first in the page too, so Tab follows what is seen).
+      Without the script both open #mic-nojs; the script removes that when it starts.
+    * A microphone problem (permission, no device…): the script swaps in a warning mark and
+      says what to do in the status line under the text box. -#}
+{% if mic.ready %}
+<button type="button" class="mic mic-pause" data-dictation-action="pause" popovertarget="mic-nojs" title="Pause voice input"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#pause"></use></svg><span class="sr-only" data-pause-label>Pause voice input</span></button>
+<button type="button" class="mic mic-toggle" data-dictation-action="toggle" popovertarget="mic-nojs" accesskey="m" title="Start voice input (Alt+M)"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#mic"></use></svg><span class="mic-dot" aria-hidden="true"></span><span class="sr-only" data-mic-label>Start voice input</span></button>
+{% else %}
+<button type="button" class="mic mic-unavailable" popovertarget="mic-help" accesskey="m" title="{{ mic.reason }} Click to see what to do." data-dictation-unavailable><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#mic-off"></use></svg><span class="sr-only" data-mic-label>Voice input unavailable</span></button>
+{% endif %}

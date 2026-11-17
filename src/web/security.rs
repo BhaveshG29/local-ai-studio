@@ -1,6 +1,6 @@
 //! Request guard: DNS-rebinding protection (Host check), cross-site request blocking (Origin
 //! check), access control for LAN clients when network access is enabled, and security
-//! headers (a CSP that forbids all scripts).
+//! headers (a CSP that only allows the app's own script file).
 
 use std::net::{IpAddr, SocketAddr};
 
@@ -15,7 +15,9 @@ use crate::SharedState;
 
 pub const ACCESS_COOKIE: &str = "las_access";
 
-pub const CSP: &str = "default-src 'self'; script-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self'; connect-src 'self'; frame-src 'self'; frame-ancestors 'self'; form-action 'self'; base-uri 'none'; object-src 'none'";
+/// The only script is `/assets/app.js` (Enter-to-send and voice input; every page works
+/// without it). No inline scripts, no `eval`, nothing from other sites.
+pub const CSP: &str = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self'; connect-src 'self'; frame-src 'self'; frame-ancestors 'self'; form-action 'self'; base-uri 'none'; object-src 'none'";
 
 fn host_without_port(host: &str) -> &str {
     if let Some(rest) = host.strip_prefix('[') {
@@ -120,7 +122,7 @@ pub fn apply_security_headers(headers: &mut HeaderMap) {
     headers.insert("cross-origin-resource-policy", HeaderValue::from_static("same-origin"));
     headers.insert(
         "permissions-policy",
-        HeaderValue::from_static("camera=(), microphone=(), geolocation=(), payment=(), usb=()"),
+        HeaderValue::from_static("camera=(), microphone=(self), geolocation=(), payment=(), usb=()"),
     );
 }
 
@@ -184,7 +186,7 @@ pub async fn unlock_page() -> Html<String> {
 
 fn unlock_html(error: Option<&str>) -> String {
     format!(
-        "<!doctype html><html lang=\"en\" data-theme=\"midnight\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Unlock · {app}</title><link rel=\"stylesheet\" href=\"/assets/app.css\"><link rel=\"stylesheet\" href=\"/assets/themes.css\"></head><body class=\"unlock\"><main class=\"unlock-card card\"><h1>Unlock {app}</h1><p>This computer's Local AI Studio is shared on the network. Enter the access token shown in <b>Settings → Server</b> on the host computer.</p>{err}<form method=\"post\" action=\"/unlock\" class=\"stack\"><label class=\"field\"><span>Access token</span><input class=\"input\" type=\"password\" name=\"token\" autocomplete=\"off\" required autofocus></label><button class=\"btn btn-primary\" type=\"submit\">Unlock</button></form></main></body></html>",
+        "<!doctype html><html lang=\"en\" data-theme=\"white\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><meta name=\"color-scheme\" content=\"light\"><title>Unlock · {app}</title><link rel=\"stylesheet\" href=\"/assets/app.css\"><link rel=\"stylesheet\" href=\"/assets/themes.css\"></head><body class=\"unlock\"><main class=\"unlock-card card\"><h1>Unlock {app}</h1><p>This computer's Local AI Studio is shared on the network. Enter the access token shown in <b>Settings → Server</b> on the host computer.</p>{err}<form method=\"post\" action=\"/unlock\" class=\"stack\"><label class=\"field\"><span>Access token</span><input class=\"input\" type=\"password\" name=\"token\" autocomplete=\"off\" required autofocus></label><button class=\"btn btn-primary\" type=\"submit\">Unlock</button></form></main></body></html>",
         app = crate::APP_NAME,
         err = error
             .map(|e| format!("<p class=\"notice notice-error\">{}</p>", crate::util::html_escape(e)))

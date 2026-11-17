@@ -1,0 +1,50 @@
+{#- Live transcription on the Speech models page: the microphone, turned into text by Whisper
+    Base while you speak. The same code (assets/app.js) and server sessions as the chat
+    microphone. Needs `whisper` (WhisperBaseStatus), `languages` (Vec<Opt>: "auto", then every
+    Whisper language) and `ctx`.
+    The script sets data-state on the section and CSS shows the controls that fit it. The
+    status shows one of seven states (Inactive, Waiting for microphone permission, Recording,
+    Transcribing, Processing, Completed, Error) in [data-dictation-label], which is aria-hidden:
+    the live region announces [data-dictation-message], which changes only with the state.
+    Without JavaScript the controls are hidden (a <noscript> style in the page's head, see
+    transcribe.html) and a note says the file form below still works; should the script fail
+    to load, each control opens #live-nojs instead. -#}
+<section class="card live-panel" id="live" aria-labelledby="live-title" data-dictation data-dictation-mode="panel">
+  <div class="live-head">
+    <h2 id="live-title"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#mic"></use></svg>Live transcription</h2>
+    <p class="muted small">Speak, and the text appears as you talk. {{ whisper.name }} runs on this computer; nothing is sent anywhere.</p>
+  </div>
+  <noscript><p class="live-nojs">Live transcription needs JavaScript, which is turned off in this browser. The file form below still works.</p></noscript>
+  <p class="live-problem" data-dictation-problem{% if whisper.ready %} hidden{% endif %}><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#alert"></use></svg><span><span data-dictation-problem-text>{% if let Some(p) = whisper.problem %}{{ p }}{% endif %}</span> <a href="#whisper-base">Go to {{ whisper.name }}</a></span></p>
+  <div class="live-js">
+    <div class="live-toolbar">
+      <div class="cluster live-controls">
+        <button type="button" class="btn btn-primary live-start" data-dictation-action="start" popovertarget="live-nojs"{% if !whisper.ready %} disabled data-dictation-unavailable{% endif %}><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#mic"></use></svg>Start</button>
+        <button type="button" class="btn live-pause" data-dictation-action="pause" popovertarget="live-nojs" title="Pause voice input"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#pause"></use></svg><span data-pause-label>Pause</span></button>
+        <button type="button" class="btn live-stop" data-dictation-action="stop" popovertarget="live-nojs"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#stop"></use></svg>Stop</button>
+      </div>
+      {% if whisper.multilingual %}
+      <label class="live-language"><span>Spoken language</span>
+        <select class="select select-sm" data-dictation-language>{% for l in languages %}<option value="{{ l.value }}" {% if l.selected %}selected{% endif %}>{{ l.label }}</option>{% endfor %}</select>
+      </label>
+      {% endif %}
+    </div>
+    <div class="live-status" data-dictation-status role="status" aria-live="polite">
+      <span class="live-state" data-dictation-label aria-hidden="true">Inactive</span>
+      <span class="live-message" data-dictation-message><span class="sr-only">Inactive. </span>{% if whisper.ready %}Press Start and speak. The text appears below as you talk.{% else %}Live transcription can start once {{ whisper.name }} is ready.{% endif %}</span>
+      <span class="live-timer" data-dictation-timer aria-hidden="true">0:00</span>
+    </div>
+    <label class="sr-only" for="live-transcript">Live transcript</label>
+    <textarea id="live-transcript" class="input live-transcript" rows="8" data-dictation-output placeholder="The text appears here as you speak. You can edit it whenever you're not recording."></textarea>
+    <div class="cluster live-actions">
+      <button type="button" class="btn btn-sm" data-dictation-action="copy" popovertarget="live-nojs"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#copy"></use></svg>Copy</button>
+      <button type="button" class="btn btn-sm" data-dictation-action="clear" popovertarget="live-nojs"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#trash"></use></svg>Clear</button>
+      <button type="button" class="btn btn-sm" data-dictation-action="download" popovertarget="live-nojs"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#download"></use></svg>Download .txt</button>
+    </div>
+  </div>
+  <div id="live-nojs" popover class="popover confirm">
+    <h3>Live transcription needs JavaScript</h3>
+    <p>It is turned off in this browser, or the page's script couldn't load. Reload the page to try again, or transcribe a recording with the form below.</p>
+    <div class="cluster"><button type="button" class="btn" popovertarget="live-nojs" popovertargetaction="hide">Close</button></div>
+  </div>
+</section>

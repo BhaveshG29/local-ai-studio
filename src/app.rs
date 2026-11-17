@@ -132,6 +132,8 @@ pub struct AppState {
     pub chat: ChatService,
     pub system: Arc<SystemMonitor>,
     pub jobs: JobRegistry,
+    /// Live voice-input sessions (Whisper Base).
+    pub dictation: crate::inference::dictation::DictationHub,
     pub index: IndexStatus,
     pub shutdown: CancellationToken,
     pub server: ServerInfo,
@@ -225,6 +227,7 @@ impl AppState {
             chat: ChatService::default(),
             system,
             jobs: JobRegistry::default(),
+            dictation: Default::default(),
             index: IndexStatus::default(),
             shutdown: CancellationToken::new(),
             server: ServerInfo {
@@ -255,14 +258,17 @@ impl AppState {
         Ok(next)
     }
 
-    /// Starts periodic housekeeping (idle model unloading).
+    /// Starts periodic housekeeping (idle model unloading, expired voice input sessions).
     pub fn spawn_background_tasks(self: &Arc<Self>) {
         let st = self.clone();
         tokio::spawn(async move {
             let mut tick = tokio::time::interval(Duration::from_secs(60));
             loop {
                 tokio::select! {
-                    _ = tick.tick() => st.inference.reap_idle(),
+                    _ = tick.tick() => {
+                        st.dictation.reap();
+                        st.inference.reap_idle();
+                    }
                     _ = st.shutdown.cancelled() => break,
                 }
             }
@@ -272,6 +278,7 @@ impl AppState {
     /// Stops everything gracefully: generations save partial answers, downloads pause.
     pub async fn shutdown_gracefully(&self) {
         self.shutdown.cancel();
+        self.dictation.stop_all();
         self.chat.stop_all();
         self.jobs.cancel_all();
         self.downloads.pause_all();

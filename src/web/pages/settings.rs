@@ -591,10 +591,13 @@ pub async fn shutdown(State(state): State<SharedState>) -> Html<String> {
         tokio::time::sleep(std::time::Duration::from_millis(300)).await;
         st.shutdown.cancel();
     });
+    let theme = state.settings().ui.theme;
     Html(format!(
-        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Stopped · {app}</title><link rel=\"stylesheet\" href=\"/assets/app.css\"><link rel=\"stylesheet\" href=\"/assets/themes.css\"></head><body data-theme=\"{theme}\" class=\"stopped\"><main class=\"card unlock-card\"><h1>{app} has stopped</h1><p>Your conversations, models and settings are saved. To start again, open Local AI Studio from your applications menu or run <code>local-ai-studio</code>.</p></main></body></html>",
+        "<!doctype html><html lang=\"en\" data-theme=\"{slug}\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><meta name=\"color-scheme\" content=\"{scheme}\"><title>Stopped · {app}</title><link rel=\"stylesheet\" href=\"/assets/app.css?v={rev}\"><link rel=\"stylesheet\" href=\"/assets/themes.css?v={rev}\"></head><body class=\"stopped\"><main class=\"card unlock-card\"><h1>{app} has stopped</h1><p>Your conversations, models and settings are saved. To start again, open Local AI Studio from your applications menu or run <code>local-ai-studio</code>.</p></main></body></html>",
         app = crate::APP_NAME,
-        theme = state.settings().ui.theme.slug()
+        slug = theme.slug(),
+        scheme = if theme.is_dark() { "dark" } else { "light" },
+        rev = crate::web::assets::stylesheet_rev(),
     ))
 }
 

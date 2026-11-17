@@ -1,0 +1,36 @@
+<!doctype html>
+{#- Download progress of Whisper Base, in a frame on the Speech models page: it reloads itself
+    every 2 seconds while the download runs, then shows how it ended and stops. -#}
+<html lang="en" data-theme="{{ theme }}" class="{% if dark %}is-dark{% else %}is-light{% endif %}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="{% if dark %}dark{% else %}light{% endif %}">
+{% if active %}<meta http-equiv="refresh" content="2">{% endif %}
+<title>Whisper Base download · Local AI Studio</title>
+<link rel="stylesheet" href="/assets/app.css?v={{ css_rev }}">
+<link rel="stylesheet" href="/assets/themes.css?v={{ css_rev }}">
+</head>
+<body class="frame wb-progress">
+{% if active %}
+<div class="wb-progress-row" role="status">
+  <span class="spinner" aria-hidden="true"></span>
+  <b class="grow truncate">{{ title }}</b>
+  {% if !waiting %}<span class="num">{{ percent }}%</span>{% endif %}
+</div>
+{% if waiting %}<progress max="100" aria-label="Waiting to download"></progress>{% else %}<progress max="100" value="{{ percent }}" aria-label="Downloaded">{{ percent }}%</progress>{% endif %}
+<p class="small muted truncate">{{ detail }}</p>
+{% else %}
+<div class="wb-progress-row" role="status">
+  <svg class="icon{% if tone == "ok" %} ok{% else if tone == "error" %} danger{% endif %}" aria-hidden="true"><use href="/assets/icons.svg#{% if tone == "ok" %}check{% else if tone == "error" %}alert{% else %}info{% endif %}"></use></svg>
+  <b class="grow truncate">{{ title }}</b>
+</div>
+{#- No #whisper-base here: the page is usually already at /transcribe#whisper-base (where the
+    buttons return to), and a link to the same address with a fragment only scrolls. -#}
+<div class="wb-progress-row wb-progress-next">
+  <a class="btn btn-sm" href="/transcribe" target="_top">Reload the page</a>
+  <span class="small muted truncate">{{ detail }}</span>
+</div>
+{% endif %}
+</body>
+</html>

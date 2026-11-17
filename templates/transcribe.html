@@ -1,54 +1,129 @@
 {% extends "base.html" %}
+{#- Without JavaScript the live panel's controls are hidden (its note says so). In the head,
+    where a <noscript> may hold a <style>; inline styles are allowed, inline scripts aren't. -#}
+{% block head %}<noscript><style>.live-panel .live-js { display: none !important; }</style></noscript>{% endblock %}
 {% block content %}
 <header class="page-head">
   <div>
-    <h1>Speech to text</h1>
-    <p class="lead">Turn recordings into text with Whisper, on this computer. Get the text, subtitles, or ask a chat model about it.</p>
+    <h1>Speech models</h1>
+    <p class="lead">Whisper Base powers voice input in chat and the live panel; any Whisper model can transcribe recordings.</p>
   </div>
 </header>
 
-{% if !has_models %}
-<div class="empty card">
-  <svg class="icon icon-xl" aria-hidden="true"><use href="/assets/icons.svg#mic"></use></svg>
-  <h2>No speech model yet</h2>
-  <p>Download a Whisper model first. <b>Whisper Base</b> (about 290 MB) is quick and good for clear speech; <b>Small</b> and larger are more accurate but slower.</p>
-  <div class="cluster center"><a class="btn btn-primary" href="/discover/hf/openai/whisper-base">Get Whisper Base</a><a class="btn" href="/discover?tab=hf&amp;task=automatic-speech-recognition">Browse speech models</a></div>
-</div>
-{% else %}
-{% if let Some(r) = running %}
-<div class="card running-card" role="status">
-  <div class="frame-row"><span class="spinner" aria-hidden="true"></span><b class="grow truncate">{{ r.label }}</b><span class="small muted">{{ r.percent }}% when this page opened</span></div>
-  <progress class="bar" max="100" value="{{ r.percent }}">{{ r.percent }}%</progress>
-  <div class="cluster tight"><a class="btn btn-primary btn-sm" href="/transcribe/{{ r.id }}">Watch progress</a><form method="post" action="/transcribe/{{ r.id }}/cancel"><button class="btn btn-sm" type="submit">Cancel</button></form></div>
-</div>
-{% endif %}
-
-<form class="card stack transcribe-form" method="post" action="/transcribe" enctype="multipart/form-data">
-  <label class="dropzone">
-    <svg class="icon icon-lg" aria-hidden="true"><use href="/assets/icons.svg#audio"></use></svg>
-    <span class="dropzone-title">Choose a recording — or drop it here</span>
-    <span class="small muted">WAV, MP3, FLAC, OGG or M4A{% if ffmpeg_available %}, or a video (its sound is used){% endif %} · up to 3 hours</span>
-    <input type="file" name="file" required accept="audio/*{% if ffmpeg_available %},video/*{% endif %}">
-  </label>
-  {% if !ffmpeg_available %}<p class="small muted">To transcribe videos, install ffmpeg (see <a href="/settings#media">Settings → Media</a>).</p>{% endif %}
-  <div class="param-grid">
-    <label class="field"><span>Model</span>
-      <select class="select" name="model_id">{% for m in models %}<option value="{{ m.value }}" {% if m.selected %}selected{% endif %}>{{ m.label }}</option>{% endfor %}</select>
-    </label>
-    <label class="field"><span>Spoken language</span>
-      <select class="select" name="language">{% for l in languages %}<option value="{{ l.value }}" {% if l.selected %}selected{% endif %}>{{ l.label }}</option>{% endfor %}</select>
-    </label>
+{#- Whisper Base: what it is, where it stands and what can be done with it. Every button is
+    a plain form that comes back to #whisper-base with a message. The page never reloads by
+    itself: a running download shows its progress in a frame that does. -#}
+<section class="card wb-card" id="whisper-base" aria-labelledby="wb-title">
+  <div class="wb-head">
+    <h2 id="wb-title">{{ whisper.name }}</h2>
+    <a class="wb-repo small mono" href="/discover/hf/{{ whisper.repo }}" title="Open its page in the Marketplace">{{ whisper.repo }}</a>
   </div>
-  <fieldset class="choice-row">
-    <legend>What should Whisper write?</legend>
-    <label class="choice"><input type="radio" name="task" value="transcribe" checked><span><b>The words as spoken</b><small class="muted">Same language as the recording</small></span></label>
-    <label class="choice"><input type="radio" name="task" value="translate"><span><b>An English translation</b><small class="muted">Works from any language Whisper knows (English-only “.en” models can't translate)</small></span></label>
-  </fieldset>
-  <div class="cluster"><button class="btn btn-primary btn-lg" type="submit"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#mic"></use></svg>Transcribe</button><span class="small muted">Long recordings take a while; you can keep using the app meanwhile.</span></div>
-</form>
+  <p class="wb-state wb-{{ card.tone }}"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#{{ card.icon }}"></use></svg><span><b>{% if whisper.ready %}Ready{% else %}Not ready{% endif %}</b><span class="sr-only">.</span> <span class="wb-sep" aria-hidden="true">·</span> {{ card.summary }}</span></p>
+  <dl class="kv wb-facts">
+    <dt>Size</dt>
+    <dd>{{ whisper.size_label }} <span class="muted">{% if whisper.downloaded %}on disk{% else %}to download{% endif %}</span></dd>
+    <dt>Format</dt>
+    <dd>{{ whisper.format }}</dd>
+    <dt>Download status</dt>
+    <dd>
+      {%- if card.downloading -%}
+      <iframe class="wb-frame" src="/speech/whisper-base/progress" title="Download progress of Whisper Base"></iframe>
+      {%- else -%}
+      {{ card.download_status }}{% if let Some(p) = card.paused_at %}<progress class="wb-bar job-muted" max="100" value="{{ p }}" aria-label="Downloaded">{{ p }}%</progress>{% endif %}
+      {%- endif -%}
+    </dd>
+    <dt>Compatibility</dt>
+    <dd class="wb-compat"><svg class="icon{% if !card.files_ok %} danger{% endif %}" aria-hidden="true"><use href="/assets/icons.svg#{% if card.files_ok %}check{% else %}x{% endif %}"></use></svg><span>{{ whisper.compatibility }}</span></dd>
+    <dt>Location</dt>
+    <dd>{% if let Some(p) = whisper.path %}<span class="mono wb-path">{{ p }}</span>{% else %}<span class="muted">Not downloaded yet. It will be saved in</span> <span class="mono wb-path">{{ card.save_dir }}</span>{% endif %}</dd>
+    <dt>Loaded</dt>
+    <dd>{% if whisper.loaded %}Yes, on {{ whisper.device }}{% else %}No{% if whisper.ready %} <span class="muted">· it loads by itself when you start recording</span>{% endif %}{% endif %}</dd>
+    <dt>Ready for transcription</dt>
+    <dd>{% if whisper.ready %}Yes{% else %}No, {{ card.reason }}{% endif %}</dd>
+  </dl>
+  <div class="cluster wb-actions">
+    {% if let Some(label) = card.download_button %}
+    <form method="post" action="/speech/whisper-base/download"><button class="btn btn-primary" type="submit"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#download"></use></svg>{{ label }}</button></form>
+    {% endif %}
+    {% if card.can_cancel %}
+    <form method="post" action="/speech/whisper-base/cancel"><button class="btn" type="submit" title="Stop the download and delete the unfinished part"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#x"></use></svg>Cancel download</button></form>
+    {% endif %}
+    {% if card.can_load %}
+    <form method="post" action="/speech/whisper-base/load"><button class="btn btn-primary" type="submit" title="Load it into memory now and check that it transcribes, so voice input starts at once"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#bolt"></use></svg>Load</button></form>
+    {% endif %}
+    {% if card.can_unload %}
+    <form method="post" action="/speech/whisper-base/unload"><button class="btn" type="submit" title="Free the memory it takes; it loads again when needed"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#power"></use></svg>Unload</button></form>
+    {% endif %}
+    {% if card.settings_link %}
+    <a class="btn" href="/settings#inference"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#settings"></use></svg>Open Settings</a>
+    {% endif %}
+    {% if let Some(href) = card.details_href %}
+    <a class="btn" href="{{ href }}"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#info"></use></svg>Model details</a>
+    {% endif %}
+    {% if card.can_delete %}
+    <button type="button" class="btn btn-ghost danger" popovertarget="wb-delete"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#trash"></use></svg>Delete…</button>
+    {% endif %}
+  </div>
+</section>
+{% if card.can_delete %}
+<div id="wb-delete" popover class="popover confirm">
+  <h3>Delete Whisper Base?</h3>
+  <p>{{ card.delete_note }}</p>
+  <div class="cluster"><form method="post" action="/speech/whisper-base/delete"><button class="btn btn-danger" type="submit">Delete</button></form><button type="button" class="btn" popovertarget="wb-delete" popovertargetaction="hide">Keep it</button></div>
+</div>
 {% endif %}
 
-<section aria-labelledby="tx-history">
+{% include "partials/dictation_panel.html" %}
+
+<section class="speech-section" aria-labelledby="tx-file-title">
+  <h2 id="tx-file-title">Transcribe a recording</h2>
+  {% if !has_models %}
+  <div class="empty card">
+    <svg class="icon icon-xl" aria-hidden="true"><use href="/assets/icons.svg#audio"></use></svg>
+    <h3>No speech model yet</h3>
+    {% if card.downloading %}
+    <p>Whisper Base is downloading (see above). Once it is done, you can transcribe recordings here. Whisper Small and larger are more accurate but slower.</p>
+    {% else %}
+    <p>Download Whisper Base above: it is quick and good for clear speech. Whisper Small and larger are more accurate but slower.</p>
+    {% endif %}
+    <div class="cluster center"><a class="btn" href="/discover?tab=hf&amp;task=automatic-speech-recognition">Browse speech models</a></div>
+  </div>
+  {% else %}
+  {% if let Some(r) = running %}
+  <div class="card running-card" role="status">
+    <div class="frame-row"><span class="spinner" aria-hidden="true"></span><b class="grow truncate">{{ r.label }}</b><span class="small muted">{{ r.percent }}% when this page opened</span></div>
+    <progress class="bar" max="100" value="{{ r.percent }}">{{ r.percent }}%</progress>
+    <div class="cluster tight"><a class="btn btn-primary btn-sm" href="/transcribe/{{ r.id }}">Watch progress</a><form method="post" action="/transcribe/{{ r.id }}/cancel"><button class="btn btn-sm" type="submit">Cancel</button></form></div>
+  </div>
+  {% endif %}
+
+  <form class="card stack transcribe-form" method="post" action="/transcribe" enctype="multipart/form-data">
+    <label class="dropzone">
+      <svg class="icon icon-lg" aria-hidden="true"><use href="/assets/icons.svg#audio"></use></svg>
+      <span class="dropzone-title">Choose a recording — or drop it here</span>
+      <span class="small muted">WAV, MP3, FLAC, OGG or M4A{% if ffmpeg_available %}, or a video (its sound is used){% endif %} · up to 3 hours</span>
+      <input type="file" name="file" required accept="audio/*{% if ffmpeg_available %},video/*{% endif %}">
+    </label>
+    {% if !ffmpeg_available %}<p class="small muted">To transcribe videos, install ffmpeg (see <a href="/settings#media">Settings → Media</a>).</p>{% endif %}
+    <div class="param-grid">
+      <label class="field"><span>Model</span>
+        <select class="select" name="model_id">{% for m in models %}<option value="{{ m.value }}" {% if m.selected %}selected{% endif %}>{{ m.label }}</option>{% endfor %}</select>
+      </label>
+      <label class="field"><span>Spoken language</span>
+        <select class="select" name="language">{% for l in languages %}<option value="{{ l.value }}" {% if l.selected %}selected{% endif %}>{{ l.label }}</option>{% endfor %}</select>
+      </label>
+    </div>
+    <fieldset class="choice-row">
+      <legend>What should Whisper write?</legend>
+      <label class="choice"><input type="radio" name="task" value="transcribe" checked><span><b>The words as spoken</b><small class="muted">Same language as the recording</small></span></label>
+      <label class="choice"><input type="radio" name="task" value="translate"><span><b>An English translation</b><small class="muted">Works from any language Whisper knows (English-only “.en” models can't translate)</small></span></label>
+    </fieldset>
+    <div class="cluster"><button class="btn btn-primary btn-lg" type="submit"><svg class="icon" aria-hidden="true"><use href="/assets/icons.svg#mic"></use></svg>Transcribe</button><span class="small muted">Long recordings take a while; you can keep using the app meanwhile.</span></div>
+  </form>
+  {% endif %}
+</section>
+
+<section class="speech-section" aria-labelledby="tx-history">
   <h2 id="tx-history">Earlier transcripts</h2>
   {% if history.is_empty() %}
   <p class="muted">Nothing yet.</p>

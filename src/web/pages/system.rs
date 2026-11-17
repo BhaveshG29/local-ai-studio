@@ -308,6 +308,14 @@ pub async fn unload(State(state): State<SharedState>, Form(f): Form<UnloadForm>)
             Err(e) => redirect_flash("/system", "error", &e.user_message()),
         },
         None if f.model_ref == "whisper" => {
+            // The same rule as the Speech models page: a recording would load it again at once.
+            if state.dictation.recording() {
+                return redirect_flash(
+                    "/system",
+                    "error",
+                    "The speech model is being used for voice input right now. Stop the recording first.",
+                );
+            }
             state.inference.unload_whisper();
             redirect_flash("/system", "ok", "Speech model unloaded.")
         }

@@ -15,15 +15,14 @@
 {% endif %}
 
 {% if jobs.is_empty() %}
-<div class="empty card">
-  <svg class="icon icon-xl" aria-hidden="true"><use href="/assets/icons.svg#download"></use></svg>
+<div class="empty">
   <p>No downloads yet.</p>
-  <a class="btn btn-primary" href="/discover">Find a model</a>
+  <a class="btn btn-primary" href="/discover">Find a model in the Marketplace</a>
 </div>
 {% else %}
 <ul class="jobs">
   {% for j in jobs %}
-  <li class="card job job-{{ j.state_class }}" id="job-{{ j.id }}">
+  <li class="job job-{{ j.state_class }}" id="job-{{ j.id }}">
     <div class="job-head">
       <div class="grow">
         <h2 class="job-title break">{{ j.title }}</h2>
@@ -57,7 +56,7 @@
 </ul>
 {% endif %}
 
-<section class="card">
+<section>
   <h2>Storage</h2>
   <dl class="kv"><dt>Models folder</dt><dd class="break mono small">{{ models_dir }}</dd><dt>Unfinished downloads</dt><dd class="break mono small">{{ partial_dir }}</dd><dt>Free space</dt><dd>{{ free_space }}</dd></dl>
   <p class="small muted">Change these in <a href="/settings#storage">Settings → Storage</a>. Every file is checked against its published checksum before it is used.</p>

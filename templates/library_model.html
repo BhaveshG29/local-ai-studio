@@ -41,19 +41,19 @@
 </div>
 
 {% if !files.is_empty() %}
-<section class="card">
+<section>
   <h2>Files</h2>
   <div class="table-wrap"><table class="table compact"><thead><tr><th>File</th><th class="num">Size</th><th>SHA-256 (start)</th></tr></thead>
   <tbody>{% for f in files %}<tr><td class="mono small break">{{ f.0 }}</td><td class="num">{{ f.1 }}</td><td class="mono small">{{ f.2 }}</td></tr>{% endfor %}</tbody></table></div>
 </section>
 {% endif %}
 {% if !parameters_text.is_empty() %}
-<details class="card disclosure"><summary><h2>Default parameters (Ollama)</h2></summary><pre class="pre-wrap small">{{ parameters_text }}</pre></details>
+<details class="disclosure section-details"><summary><h2>Default parameters (Ollama)</h2></summary><pre class="pre-wrap small">{{ parameters_text }}</pre></details>
 {% endif %}
 {% if !template_excerpt.is_empty() %}
-<details class="card disclosure"><summary><h2>Prompt template</h2></summary><pre class="pre-wrap small">{{ template_excerpt }}</pre></details>
+<details class="disclosure section-details"><summary><h2>Prompt template</h2></summary><pre class="pre-wrap small">{{ template_excerpt }}</pre></details>
 {% endif %}
 {% if !license_excerpt.is_empty() %}
-<details class="card disclosure"><summary><h2>License (from the publisher)</h2></summary><pre class="pre-wrap small">{{ license_excerpt }}</pre></details>
+<details class="disclosure section-details"><summary><h2>License (from the publisher)</h2></summary><pre class="pre-wrap small">{{ license_excerpt }}</pre></details>
 {% endif %}
 {% endblock %}
